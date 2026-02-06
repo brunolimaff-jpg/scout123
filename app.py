@@ -1,626 +1,401 @@
-"""
-app.py — Senior Scout 360 v3.0
-Interface Streamlit com pipeline robusto de 6 passos.
-"""
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+“””
+app.py — Senior Scout 360 v3.1 (Full Pro, All Verticals, Visual Pipeline)
+“””
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(**file**)))
 
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
-import time
-import random
-import json
-
+import time, random, json
 from services.dossier_orchestrator import gerar_dossie_completo
 from services.market_estimator import calcular_sas
 from services.cnpj_service import consultar_cnpj, formatar_cnpj, validar_cnpj, limpar_cnpj
 from services.cache_service import cache
 from services.request_queue import request_queue
-from utils.market_intelligence import (
-    ARGUMENTOS_CONCORRENCIA, get_contexto_cnae, get_contexto_regional,
-)
+from utils.market_intelligence import ARGUMENTOS_CONCORRENCIA, get_contexto_cnae, get_contexto_regional
+from utils.pdf_export import gerar_pdf
 from scout_types import DossieCompleto, Tier, QualityLevel
 
+st.set_page_config(page_title=“Senior Scout 360 v3.1”, page_icon=“🕵️”, layout=“wide”, initial_sidebar_state=“expanded”)
 
-# =============================================================================
-# CONFIG
-# =============================================================================
-
-st.set_page_config(
-    page_title="Senior Scout 360 v3.0",
-    page_icon="🕵️",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-SARA_PHRASES = [
-    "☕ Enchendo a garrafa de café e calibrando os satélites...",
-    "🛰️ Ativando reconhecimento orbital...",
-    "🚜 Ligando os motores da inteligência...",
-    "👢 Calçando a botina para entrar no mato digital...",
-    "🤠 Ajeitando o chapéu: hora de caçar oportunidades...",
-    "📡 Conectando com 5 agentes de inteligência...",
-    "📊 Cruzando dados de satélite com balanços financeiros...",
-    "🚁 Sobrevoando a operação em busca de sinais...",
-    "💰 Rastreando movimentações no mercado de capitais...",
-    "🔍 Investigando CRAs, Fiagros e governança...",
-    "🧠 Gemini Pro está pensando profundamente...",
+FRASES = [
+“🛰️ Ativando satélites de reconhecimento…”, “📡 Conectando 7 agentes Pro…”,
+“💰 Rastreando CRAs e Fiagros…”, “🧠 Gemini 2.5 Pro pensando profundamente…”,
+“🔗 Mapeando cadeia de valor…”, “🏛️ Investigando grupo econômico…”,
+“📊 Cruzando dados financeiros…”, “🚜 Varrendo operações de campo…”,
 ]
 
-# =============================================================================
-# CSS
-# =============================================================================
+# === CSS ===
 
-st.markdown("""
-<style>
-    /* Métricas */
-    div[data-testid="stMetric"] {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 18px;
-        border-radius: 12px;
-        color: white;
-    }
-    div[data-testid="stMetric"] label {
-        color: rgba(255,255,255,0.8) !important;
-    }
-    div[data-testid="stMetric"] [data-testid="stMetricValue"] {
-        color: white !important;
-        font-size: 2rem !important;
-    }
-    div[data-testid="stMetric"] [data-testid="stMetricDelta"] {
-        color: rgba(255,255,255,0.9) !important;
-    }
-    
-    /* Botão principal */
-    div.stButton > button[kind="primary"] {
-        background: linear-gradient(90deg, #FF4B4B, #FF6B35);
-        color: white;
-        font-weight: bold;
-        padding: 0.6rem 1.2rem;
-        border-radius: 10px;
-        border: none;
-        font-size: 1rem;
-    }
-    
-    /* Cards de seção */
-    .scout-section-card {
-        background-color: #f8f9fa;
-        border-left: 4px solid #667eea;
-        padding: 16px 20px;
-        border-radius: 0 8px 8px 0;
-        margin-bottom: 12px;
-    }
-    
-    /* Quality badge */
-    .quality-badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-weight: bold;
-        font-size: 0.9rem;
-    }
-    .quality-excelente { background: #d4edda; color: #155724; }
-    .quality-bom { background: #cce5ff; color: #004085; }
-    .quality-aceitavel { background: #fff3cd; color: #856404; }
-    .quality-insuficiente { background: #f8d7da; color: #721c24; }
-    
-    /* Tier badges */
-    .tier-diamante { 
-        background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
-        color: #3730a3;
-        font-weight: bold;
-        padding: 6px 16px;
-        border-radius: 20px;
-        display: inline-block;
-    }
-    .tier-ouro { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #92400e; }
-    .tier-prata { background: linear-gradient(135deg, #e5e7eb, #d1d5db); color: #374151; }
-    .tier-bronze { background: linear-gradient(135deg, #fed7aa, #fdba74); color: #9a3412; }
-</style>
-""", unsafe_allow_html=True)
+st.markdown(”””<style>
+div[data-testid=“stMetric”] { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); padding: 16px; border-radius: 12px; }
+div[data-testid=“stMetric”] label { color: rgba(255,255,255,0.8) !important; }
+div[data-testid=“stMetric”] [data-testid=“stMetricValue”] { color: white !important; font-size: 1.8rem !important; }
+div[data-testid=“stMetric”] [data-testid=“stMetricDelta”] { color: rgba(255,255,255,0.9) !important; }
+.step-card { background: #f8f9fa; border-left: 4px solid #2d5a87; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 8px; }
+.step-success { border-left-color: #28a745; }
+.step-warning { border-left-color: #ffc107; }
+.step-error { border-left-color: #dc3545; }
+.conf-high { color: #28a745; font-weight: bold; }
+.conf-med { color: #ffc107; font-weight: bold; }
+.conf-low { color: #dc3545; font-weight: bold; }
+</style>”””, unsafe_allow_html=True)
 
+# === SESSION STATE ===
 
-# =============================================================================
-# SESSION STATE
-# =============================================================================
+for k in [‘dossie’, ‘logs’, ‘historico’, ‘step_results’]:
+if k not in st.session_state:
+st.session_state[k] = [] if k in [‘logs’, ‘historico’, ‘step_results’] else None
 
-if 'dossie' not in st.session_state:
-    st.session_state.dossie = None
-if 'logs' not in st.session_state:
-    st.session_state.logs = []
-if 'historico' not in st.session_state:
-    st.session_state.historico = []
-
-
-# =============================================================================
-# SIDEBAR
-# =============================================================================
+# === SIDEBAR ===
 
 with st.sidebar:
-    st.title("🕵️ Senior Scout 360")
-    st.caption("Intelligence Unit | v3.0 (Multi-Agent Pipeline)")
-    st.markdown("---")
-    
-    # === API KEY ===
-    try:
-        api_key = st.secrets["GEMINI_API_KEY"]
-        st.success("✅ API Key configurada")
-    except (FileNotFoundError, KeyError):
-        st.warning("⚠️ Modo Local")
-        api_key = st.text_input("Gemini API Key:", type="password")
-        if not api_key:
-            st.error("Insira a API Key para operar.")
-            st.stop()
-    
-    st.markdown("---")
-    
-    # === INPUTS ===
-    st.subheader("🎯 Alvo")
-    target_company = st.text_input(
-        "Nome da Empresa ou Grupo",
-        placeholder="Ex: Grupo SLC Agrícola, Bom Futuro...",
-    )
-    
-    target_cnpj = st.text_input(
-        "CNPJ (opcional)",
-        placeholder="XX.XXX.XXX/XXXX-XX",
-    )
-    
-    # Validação visual do CNPJ
-    if target_cnpj:
-        cnpj_limpo = limpar_cnpj(target_cnpj)
-        if validar_cnpj(cnpj_limpo):
-            st.caption(f"✅ CNPJ válido: {formatar_cnpj(cnpj_limpo)}")
-        elif len(cnpj_limpo) > 0:
-            st.caption("❌ CNPJ inválido")
-    
-    st.markdown("---")
-    
-    # === CONFIGURAÇÕES ===
-    with st.expander("⚙️ Configurações Avançadas"):
-        modelo_analise = st.selectbox(
-            "Modelo para Análise",
-            ["gemini-2.5-pro (Recomendado)", "gemini-2.5-flash (Mais rápido)"],
-            index=0,
-        )
-        
-        executar_audit_ia = st.checkbox("Executar Auditoria por IA", value=True)
-        
-        st.caption(f"Cache: {cache.stats['hit_rate']} hit rate | "
-                   f"Queue: {request_queue.stats['total_requests']} requisições")
-    
-    st.markdown("---")
-    
-    # === BOTÃO ===
-    btn_investigate = st.button(
-        "🚀 Iniciar Investigação Completa",
-        type="primary",
-        disabled=not target_company,
-        use_container_width=True,
-    )
-    
-    st.markdown("---")
-    
-    # === INFO ===
-    st.info("""**Pipeline v3.0 (6 Passos)**
-1. 📋 Consulta CNPJ (BrasilAPI)
-2. 🛰️ Recon Operacional (Flash)
-3. 💰 Sniper Financeiro (Flash)
-4. 📡 Intel de Mercado (Flash)
-5. 🧠 Análise Estratégica (Pro)
-6. ✅ Quality Gate (Pro)""")
-    
-    # === HISTÓRICO ===
-    if st.session_state.historico:
-        st.markdown("---")
-        st.subheader("📚 Histórico")
-        for h in reversed(st.session_state.historico[-5:]):
-            st.caption(f"• {h['empresa']} — {h['tier']} ({h['score']}/1000)")
+st.title(“🕵️ Senior Scout 360”)
+st.caption(“v3.1 | All Pro | 8 Agents | Full Agro”)
+st.markdown(”—”)
+try:
+api_key = st.secrets[“GEMINI_API_KEY”]
+st.success(“✅ API Key OK”)
+except (FileNotFoundError, KeyError):
+api_key = st.text_input(“Gemini API Key:”, type=“password”)
+if not api_key: st.error(“Insira a API Key”); st.stop()
+st.markdown(”—”)
+target = st.text_input(“🎯 Empresa / Grupo”, placeholder=“Ex: SLC Agrícola, Bom Futuro…”)
+target_cnpj = st.text_input(“CNPJ (opcional)”, placeholder=“XX.XXX.XXX/XXXX-XX”)
+if target_cnpj:
+cl = limpar_cnpj(target_cnpj)
+if cl and validar_cnpj(cl): st.caption(f”✅ {formatar_cnpj(cl)}”)
+elif cl: st.caption(“❌ Inválido”)
+st.markdown(”—”)
+btn = st.button(“🚀 Investigação Completa”, type=“primary”, disabled=not target, use_container_width=True)
+st.markdown(”—”)
+st.info(”**Pipeline v3.1 (8 Passos)**\n\n”
+“1. 📋 CNPJ (BrasilAPI)\n2. 🛰️ Recon Operacional\n3. 💰 Sniper Financeiro\n”
+“4. 🔗 Cadeia de Valor\n5. 🏛️ Grupo Econômico\n6. 📡 Intel Mercado\n”
+“7. 🧠 Análise Estratégica\n8. ✅ Quality Gate\n\n*Todos no Gemini 2.5 Pro*”)
+if st.session_state.historico:
+st.markdown(”—”)
+st.subheader(“📚 Histórico”)
+for h in reversed(st.session_state.historico[-8:]):
+st.caption(f”• {h[‘empresa’]} — {h[‘tier’]} ({h[‘score’]})”)
 
+# === TABS PRINCIPAIS ===
 
-# =============================================================================
-# ÁREA PRINCIPAL
-# =============================================================================
+tab_scout, tab_compare, tab_arsenal = st.tabs([“🕵️ Scout”, “⚖️ Comparador”, “⚔️ Arsenal”])
 
-if not target_company and st.session_state.dossie is None:
-    # === TELA DE BOAS-VINDAS ===
-    st.header("🕵️ Senior Scout 360")
-    st.subheader("Sistema de Inteligência para Prospecção Agro")
-    
-    st.markdown("""
-    O **Senior Scout 360 v3.0** utiliza **5 agentes de IA especializados** para investigar 
-    empresas do agronegócio e gerar dossiês estratégicos completos.
-    """)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("#### 🛰️ Reconhecimento")
-        st.markdown("Mapeia estrutura física, hectares, culturas e verticalização do grupo econômico.")
-    with col2:
-        st.markdown("#### 💰 Inteligência Financeira")
-        st.markdown("Rastreia CRAs, Fiagros, auditorias, parceiros financeiros e governança.")
-    with col3:
-        st.markdown("#### 🧠 Análise Profunda")
-        st.markdown("Gemini Pro gera análise estratégica com plano de ataque personalizado.")
-    
-    st.markdown("---")
-    st.markdown("**👈 Digite o nome de uma empresa na barra lateral para começar.**")
+with tab_scout:
+if not target and st.session_state.dossie is None:
+st.header(“🕵️ Senior Scout 360”)
+st.markdown(”**7 agentes de IA especializados** no Gemini 2.5 Pro investigam empresas do agronegócio.”)
+c1, c2, c3, c4 = st.columns(4)
+with c1: st.markdown(”#### 🛰️ Recon\nHectares, culturas, verticalizações”)
+with c2: st.markdown(”#### 💰 Finanças\nCRAs, Fiagros, governança”)
+with c3: st.markdown(”#### 🔗 Cadeia\nFornecedores, clientes, export”)
+with c4: st.markdown(”#### 🧠 Análise\nDossiê estratégico Deep Thinking”)
 
-elif btn_investigate and target_company:
-    # === EXECUÇÃO DO PIPELINE ===
+```
+elif btn and target:
     st.session_state.dossie = None
     st.session_state.logs = []
-    
-    # Containers para UI dinâmica
-    header_container = st.container()
-    progress_container = st.container()
-    log_container = st.container()
-    
-    with header_container:
-        st.header(f"🔍 Investigando: {target_company}")
-    
-    # Progress bar e status
-    with progress_container:
-        progress_bar = st.progress(0.0)
-        status_text = st.empty()
-        phase_text = st.empty()
-    
-    def update_progress(pct: float, msg: str):
-        progress_bar.progress(min(pct, 1.0))
-        status_text.markdown(f"**{msg}**")
-        phase_text.caption(random.choice(SARA_PHRASES))
-    
-    def add_log(msg: str):
-        st.session_state.logs.append(msg)
-    
+    st.session_state.step_results = []
+    st.header(f"🔍 Investigando: {target}")
+    progress_bar = st.progress(0.0)
+    status = st.empty()
+    step_container = st.container()
+
+    def on_progress(p, m):
+        progress_bar.progress(min(p, 1.0))
+        status.markdown(f"**{m}** — _{random.choice(FRASES)}_")
+
+    def on_step(s):
+        st.session_state.step_results.append(s)
+        ic = {"success": "✅", "warning": "⚠️", "error": "❌"}.get(s.status, "⏳")
+        conf_cls = "conf-high" if s.confianca >= 0.7 else "conf-med" if s.confianca >= 0.4 else "conf-low"
+        with step_container:
+            cls = f"step-{s.status}"
+            html = f'<div class="step-card {cls}"><b>{ic} Passo {s.step_number}: {s.step_name}</b>'
+            html += f' <span style="float:right">{s.tempo_segundos:.1f}s</span><br>'
+            html += f'<span style="color:#555">{s.resumo}</span>'
+            if s.confianca > 0:
+                html += f' | <span class="{conf_cls}">Confiança: {s.confianca:.0%}</span>'
+            if s.detalhes:
+                html += '<br><small style="color:#777">' + ' | '.join(s.detalhes[:4]) + '</small>'
+            html += '</div>'
+            st.markdown(html, unsafe_allow_html=True)
+
     try:
-        dossie = gerar_dossie_completo(
-            empresa_alvo=target_company,
-            api_key=api_key,
-            cnpj=target_cnpj,
-            log_callback=add_log,
-            progress_callback=update_progress,
-        )
-        
+        dossie = gerar_dossie_completo(target, api_key, target_cnpj,
+                                        log_cb=lambda m: st.session_state.logs.append(m),
+                                        progress_cb=on_progress, step_cb=on_step)
         st.session_state.dossie = dossie
         st.session_state.historico.append({
-            'empresa': dossie.dados_operacionais.nome_grupo or target_company,
-            'score': dossie.sas_result.score,
-            'tier': dossie.sas_result.tier.value,
-            'timestamp': dossie.timestamp_geracao,
-        })
-        
-        # Limpa progress
-        progress_container.empty()
+            'empresa': dossie.dados_operacionais.nome_grupo or target,
+            'score': dossie.sas_result.score, 'tier': dossie.sas_result.tier.value})
         st.rerun()
-        
     except Exception as e:
-        st.error(f"❌ Erro no pipeline: {str(e)}")
-        with st.expander("📋 Log de Execução"):
-            for log in st.session_state.logs:
-                st.text(log)
+        st.error(f"❌ Erro: {e}")
+        with st.expander("Log"): [st.text(l) for l in st.session_state.logs]
 
+# === EXIBIÇÃO DO DOSSIÊ ===
+if st.session_state.dossie:
+    d: DossieCompleto = st.session_state.dossie
+    nome = d.dados_operacionais.nome_grupo or d.empresa_alvo
+    op = d.dados_operacionais
+    fi = d.dados_financeiros
+    cv = d.cadeia_valor
+    gr = d.grupo_economico
 
-# =============================================================================
-# EXIBIÇÃO DO DOSSIÊ
-# =============================================================================
-
-if st.session_state.dossie is not None:
-    dossie: DossieCompleto = st.session_state.dossie
-    
-    # === CABEÇALHO ===
-    nome_grupo = dossie.dados_operacionais.nome_grupo or dossie.empresa_alvo
-    
-    col_score, col_info, col_quality = st.columns([1, 2, 1])
-    
-    with col_score:
-        tier_name = dossie.sas_result.tier.value
-        st.metric(
-            label="Senior Agro Score 4.0",
-            value=f"{dossie.sas_result.score}/1000",
-            delta=tier_name,
-        )
-    
-    with col_info:
-        st.subheader(f"📋 Dossiê: {nome_grupo}")
-        
-        # Badges
-        badges = []
-        vert = dossie.dados_operacionais.verticalizacao
-        if vert.agroindustria: badges.append("🏭 Agroindústria")
-        if vert.sementeira: badges.append("🌱 Sementeira")
-        if vert.silos: badges.append("🏗️ Silos")
-        if vert.algodoeira: badges.append("☁️ Algodoeira")
-        if vert.usina: badges.append("⚡ Usina")
-        if vert.frigorifico: badges.append("🥩 Frigorífico")
-        if dossie.dados_financeiros.governanca_corporativa: badges.append("📊 Governança")
-        
-        if badges:
-            st.markdown(" ".join([f"`{b}`" for b in badges]))
-        
-        # Meta info
-        st.caption(
-            f"⏱️ Gerado em {dossie.tempo_total_segundos:.1f}s | "
-            f"📅 {dossie.timestamp_geracao} | "
-            f"🤖 {dossie.modelo_usado}"
-        )
-    
-    with col_quality:
-        if dossie.quality_report:
-            qr = dossie.quality_report
-            level_colors = {
-                QualityLevel.EXCELENTE: "🟢",
-                QualityLevel.BOM: "🔵",
-                QualityLevel.ACEITAVEL: "🟡",
-                QualityLevel.INSUFICIENTE: "🔴",
-            }
-            st.metric(
-                label="Quality Gate",
-                value=f"{qr.score_qualidade:.0f}%",
-                delta=f"{level_colors.get(qr.nivel, '')} {qr.nivel.value}",
-            )
-    
+    # Header
+    cs, ci, cq = st.columns([1, 2, 1])
+    with cs:
+        st.metric("SAS 4.0", f"{d.sas_result.score}/1000", d.sas_result.tier.value)
+    with ci:
+        st.subheader(f"📋 {nome}")
+        badges = op.verticalizacao.listar_ativos()
+        if badges: st.markdown(" ".join([f"`{b}`" for b in badges[:10]]))
+        st.caption(f"⏱️ {d.tempo_total_segundos:.0f}s | 📅 {d.timestamp_geracao} | 🤖 {d.modelo_usado}")
+    with cq:
+        if d.quality_report:
+            lc = {"EXCELENTE": "🟢", "BOM": "🔵", "ACEITÁVEL": "🟡", "INSUFICIENTE": "🔴"}
+            st.metric("Quality Gate", f"{d.quality_report.score_qualidade:.0f}%",
+                      f"{lc.get(d.quality_report.nivel.value, '')} {d.quality_report.nivel.value}")
     st.markdown("---")
-    
-    # === MOVIMENTOS FINANCEIROS ===
-    fin = dossie.dados_financeiros
-    if fin.movimentos_financeiros or fin.fiagros_relacionados or fin.cras_emitidos:
-        st.markdown("### 💰 Movimentos de Mercado & Governança")
-        
-        col_mov, col_fiagro = st.columns(2)
-        
-        with col_mov:
-            for item in fin.movimentos_financeiros:
-                st.markdown(f"- 🏦 **{item}**")
-        
-        with col_fiagro:
-            if fin.fiagros_relacionados:
-                st.markdown("**Fiagros:**")
-                for f_item in fin.fiagros_relacionados:
-                    st.markdown(f"- 📈 {f_item}")
-            if fin.cras_emitidos:
-                st.markdown("**CRAs:**")
-                for c_item in fin.cras_emitidos:
-                    st.markdown(f"- 📜 {c_item}")
-            if fin.auditorias:
-                st.markdown("**Auditorias:**")
-                for a_item in fin.auditorias:
-                    st.markdown(f"- ✅ {a_item}")
-        
+
+    # Pipeline Steps Visual
+    if d.pipeline_steps:
+        with st.expander("📊 Resultado por Agente (clique para expandir)", expanded=False):
+            for s in d.pipeline_steps:
+                ic = {"success": "✅", "warning": "⚠️", "error": "❌"}.get(s.status, "⏳")
+                conf_c = "🟢" if s.confianca >= 0.7 else "🟡" if s.confianca >= 0.4 else "🔴" if s.confianca > 0 else ""
+                st.markdown(f"**{ic} {s.step_name}** ({s.tempo_segundos:.1f}s) {conf_c}")
+                st.markdown(f"  _{s.resumo}_")
+                if s.detalhes:
+                    for det in s.detalhes: st.markdown(f"  - {det}")
+                st.markdown("---")
+
+    # Financeiros
+    if fi.movimentos_financeiros or fi.fiagros_relacionados:
+        st.markdown("### 💰 Movimentos Financeiros & Governança")
+        cm, cf2 = st.columns(2)
+        with cm:
+            for m in fi.movimentos_financeiros: st.markdown(f"- 🏦 **{m}**")
+        with cf2:
+            if fi.fiagros_relacionados:
+                st.markdown("**Fiagros:**"); [st.markdown(f"- 📈 {f}") for f in fi.fiagros_relacionados]
+            if fi.cras_emitidos:
+                st.markdown("**CRAs:**"); [st.markdown(f"- 📜 {c}") for c in fi.cras_emitidos]
+            if fi.auditorias:
+                st.markdown("**Auditorias:**"); [st.markdown(f"- ✅ {a}") for a in fi.auditorias]
         st.markdown("---")
-    
-    # === RAIO-X DA OPERAÇÃO ===
+
+    # Raio-X
     st.markdown("### 📊 Raio-X da Operação")
-    
-    c1, c2, c3, c4, c5 = st.columns(5)
-    
-    hectares = dossie.dados_operacionais.hectares_total
-    funcs = fin.funcionarios_estimados
-    capital = fin.capital_social_estimado
-    culturas = dossie.dados_operacionais.culturas
-    fazendas = dossie.dados_operacionais.numero_fazendas
-    
-    c1.metric("Área Total", f"{hectares:,.0f} ha" if hectares > 0 else "N/D")
-    c2.metric("Funcionários", f"{funcs:,}" if funcs > 0 else "N/D")
-    c3.metric("Capital", f"R$ {capital/1e6:.1f}M" if capital > 0 else "N/D")
-    c4.metric("Culturas", ", ".join(culturas[:3]) if culturas else "N/D")
-    c5.metric("Fazendas", str(fazendas) if fazendas > 0 else "N/D")
-    
-    if dossie.sas_result.dados_inferidos:
-        st.caption("⚠️ Alguns valores foram estimados por heurísticas de mercado.")
-    
+    mc = st.columns(6)
+    mc[0].metric("Área", f"{op.hectares_total:,} ha" if op.hectares_total else "N/D")
+    mc[1].metric("Funcionários", f"{fi.funcionarios_estimados:,}" if fi.funcionarios_estimados else "N/D")
+    mc[2].metric("Capital", f"R${fi.capital_social_estimado/1e6:.1f}M" if fi.capital_social_estimado else "N/D")
+    mc[3].metric("Culturas", ", ".join(op.culturas[:3]) if op.culturas else "N/D")
+    mc[4].metric("Fazendas", str(op.numero_fazendas) if op.numero_fazendas else "N/D")
+    mc[5].metric("Grupo", f"{gr.total_empresas} empresas" if gr.total_empresas else "N/D")
+    if op.cabecas_gado or op.cabecas_aves:
+        mc2 = st.columns(4)
+        if op.cabecas_gado: mc2[0].metric("Gado", f"{op.cabecas_gado:,} cab")
+        if op.cabecas_aves: mc2[1].metric("Aves", f"{op.cabecas_aves:,} cab")
+        if op.cabecas_suinos: mc2[2].metric("Suínos", f"{op.cabecas_suinos:,} cab")
+        if op.area_irrigada_ha: mc2[3].metric("Irrigada", f"{op.area_irrigada_ha:,} ha")
     st.markdown("---")
-    
-    # === SCORE BREAKDOWN (SPIDER CHART) ===
-    st.markdown("### 📊 Breakdown do Score SAS 4.0")
-    
-    col_chart, col_table = st.columns([2, 1])
-    
-    with col_chart:
-        breakdown = dossie.sas_result.breakdown
-        categories = ["Músculo\n(Porte)", "Complexidade", "Gente\n(Gestão)", "Momento\n(Gov/Tech)"]
-        values = [breakdown.musculo, breakdown.complexidade, breakdown.gente, breakdown.momento]
-        max_values = [400, 250, 200, 150]
-        percentages = [v/m*100 for v, m in zip(values, max_values)]
-        
-        fig = go.Figure()
-        
-        fig.add_trace(go.Scatterpolar(
-            r=percentages + [percentages[0]],
-            theta=categories + [categories[0]],
-            fill='toself',
-            name='Score',
-            line_color='#667eea',
-            fillcolor='rgba(102, 126, 234, 0.3)',
-        ))
-        
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(visible=True, range=[0, 100], ticksuffix="%"),
-            ),
-            showlegend=False,
-            height=350,
-            margin=dict(l=60, r=60, t=30, b=30),
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col_table:
-        df_score = pd.DataFrame([
-            {"Pilar": "Músculo (Porte)", "Pontos": breakdown.musculo, "Máx": 400,
-             "Pct": f"{breakdown.musculo/400*100:.0f}%"},
-            {"Pilar": "Complexidade", "Pontos": breakdown.complexidade, "Máx": 250,
-             "Pct": f"{breakdown.complexidade/250*100:.0f}%"},
-            {"Pilar": "Gente (Gestão)", "Pontos": breakdown.gente, "Máx": 200,
-             "Pct": f"{breakdown.gente/200*100:.0f}%"},
-            {"Pilar": "Momento (Gov)", "Pontos": breakdown.momento, "Máx": 150,
-             "Pct": f"{breakdown.momento/150*100:.0f}%"},
-        ])
-        st.dataframe(df_score, hide_index=True, use_container_width=True)
-        
-        st.markdown(f"**Total: {dossie.sas_result.score}/1000** — {dossie.sas_result.tier.value}")
-    
-    # === JUSTIFICATIVAS DO SCORE ===
-    if dossie.sas_result.justificativas:
-        with st.expander("🔍 Justificativas do Cálculo"):
-            for j in dossie.sas_result.justificativas:
-                st.text(f"→ {j}")
-    
-    st.markdown("---")
-    
-    # === INTEL DE MERCADO ===
-    intel = dossie.intel_mercado
-    if intel.noticias_recentes or intel.sinais_compra or intel.dores_identificadas:
-        st.markdown("### 📡 Inteligência de Mercado")
-        
-        tab_sinais, tab_noticias, tab_riscos = st.tabs(
-            ["🎯 Sinais de Compra", "📰 Notícias", "⚠️ Riscos & Oportunidades"]
-        )
-        
-        with tab_sinais:
-            if intel.sinais_compra:
-                for s in intel.sinais_compra:
-                    st.markdown(f"- 🟢 {s}")
-            if intel.dores_identificadas:
-                st.markdown("**Dores Identificadas:**")
-                for d in intel.dores_identificadas:
-                    st.markdown(f"- 🔴 {d}")
-        
-        with tab_noticias:
-            for n in intel.noticias_recentes:
-                if isinstance(n, dict):
-                    st.markdown(f"**{n.get('titulo', 'Notícia')}** ({n.get('data_aprox', '')})")
-                    st.caption(n.get('resumo', ''))
-                else:
-                    st.markdown(f"- {n}")
-        
-        with tab_riscos:
-            col_risk, col_opp = st.columns(2)
-            with col_risk:
-                st.markdown("**⚠️ Riscos:**")
-                for r in intel.riscos:
-                    st.markdown(f"- {r}")
-            with col_opp:
-                st.markdown("**💡 Oportunidades:**")
-                for o in intel.oportunidades:
-                    st.markdown(f"- {o}")
-    
-    st.markdown("---")
-    
-    # === ANÁLISE ESTRATÉGICA ===
-    st.markdown("### 🧠 Inteligência Estratégica (Agente Sara)")
-    
-    for secao in dossie.secoes_analise:
-        with st.expander(f"{secao.icone} {secao.titulo}", expanded=True):
-            st.markdown(secao.conteudo)
-    
-    st.markdown("---")
-    
-    # === DADOS CNPJ ===
-    if dossie.dados_cnpj:
-        with st.expander("📋 Dados Cadastrais (CNPJ)"):
-            cnpj_data = dossie.dados_cnpj
-            
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.markdown(f"**Razão Social:** {cnpj_data.razao_social}")
-                st.markdown(f"**Nome Fantasia:** {cnpj_data.nome_fantasia}")
-                st.markdown(f"**CNPJ:** {formatar_cnpj(cnpj_data.cnpj)}")
-                st.markdown(f"**Situação:** {cnpj_data.situacao_cadastral}")
-                st.markdown(f"**Abertura:** {cnpj_data.data_abertura}")
-            with col_b:
-                st.markdown(f"**Natureza Jurídica:** {cnpj_data.natureza_juridica}")
-                st.markdown(f"**Capital Social:** R$ {cnpj_data.capital_social:,.2f}")
-                st.markdown(f"**Porte:** {cnpj_data.porte}")
-                st.markdown(f"**CNAE:** {cnpj_data.cnae_principal} — {cnpj_data.cnae_descricao}")
-                st.markdown(f"**Local:** {cnpj_data.municipio}/{cnpj_data.uf}")
-            
-            if cnpj_data.qsa:
-                st.markdown("**Quadro Societário:**")
-                df_qsa = pd.DataFrame(cnpj_data.qsa)
-                st.dataframe(df_qsa, hide_index=True, use_container_width=True)
-    
-    # === QUALITY GATE ===
-    if dossie.quality_report:
-        with st.expander("✅ Relatório de Qualidade (Quality Gate)"):
-            qr = dossie.quality_report
-            
-            for check in qr.checks:
-                icon = "✅" if check.passou else "❌"
-                st.markdown(f"{icon} **{check.criterio}** — {check.nota}")
-            
-            if qr.recomendacoes:
-                st.markdown("**Recomendações:**")
-                for rec in qr.recomendacoes:
-                    st.markdown(f"- {rec}")
-    
-    # === EXPORTAÇÃO ===
-    st.markdown("---")
-    st.markdown("### 📤 Exportar Dossiê")
-    
-    col_export1, col_export2, col_export3 = st.columns(3)
-    
-    # Markdown completo
-    md_content = f"# Dossiê: {nome_grupo}\n"
-    md_content += f"**Score SAS 4.0:** {dossie.sas_result.score}/1000 — {dossie.sas_result.tier.value}\n\n"
-    md_content += f"**Gerado em:** {dossie.timestamp_geracao}\n\n---\n\n"
-    
-    for secao in dossie.secoes_analise:
-        md_content += f"## {secao.icone} {secao.titulo}\n\n{secao.conteudo}\n\n---\n\n"
-    
-    if fin.movimentos_financeiros:
-        md_content += "## 💰 Movimentos Financeiros\n\n"
-        for m in fin.movimentos_financeiros:
-            md_content += f"- {m}\n"
-    
-    with col_export1:
-        st.download_button(
-            "📝 Baixar Markdown",
-            data=md_content,
-            file_name=f"dossie_{nome_grupo.replace(' ', '_')}.md",
-            mime="text/markdown",
-            use_container_width=True,
-        )
-    
-    with col_export2:
-        json_export = {
-            "empresa": nome_grupo,
-            "score": dossie.sas_result.score,
-            "tier": dossie.sas_result.tier.value,
-            "breakdown": dossie.sas_result.breakdown.to_dict(),
-            "dados_operacionais": {
-                "hectares": dossie.dados_operacionais.hectares_total,
-                "culturas": dossie.dados_operacionais.culturas,
-                "regioes": dossie.dados_operacionais.regioes_atuacao,
-            },
-            "dados_financeiros": {
-                "capital": fin.capital_social_estimado,
-                "funcionarios": fin.funcionarios_estimados,
-                "movimentos": fin.movimentos_financeiros,
-                "fiagros": fin.fiagros_relacionados,
-                "cras": fin.cras_emitidos,
-            },
-            "timestamp": dossie.timestamp_geracao,
-        }
-        st.download_button(
-            "📊 Baixar JSON",
-            data=json.dumps(json_export, indent=2, ensure_ascii=False),
-            file_name=f"dossie_{nome_grupo.replace(' ', '_')}.json",
-            mime="application/json",
-            use_container_width=True,
-        )
-    
-    with col_export3:
-        if st.button("📋 Copiar Texto", use_container_width=True):
-            st.code(md_content, language="markdown")
-    
-    # === LOG DE EXECUÇÃO ===
-    with st.expander("🖥️ Log de Execução do Pipeline"):
-        for log in st.session_state.logs:
-            st.text(log)
-        
+
+    # Cadeia de Valor
+    if cv.posicao_cadeia:
+        st.markdown("### 🔗 Cadeia de Valor")
+        cc1, cc2, cc3 = st.columns(3)
+        with cc1:
+            st.markdown(f"**Posição:** {cv.posicao_cadeia}")
+            st.markdown(f"**Integração:** {cv.integracao_vertical_nivel}")
+            st.markdown(f"**Exporta:** {'Sim → ' + ', '.join(cv.mercados_exportacao[:3]) if cv.exporta else 'Não'}")
+        with cc2:
+            st.markdown("**Clientes:**"); [st.markdown(f"- {c}") for c in cv.clientes_principais[:5]]
+        with cc3:
+            st.markdown("**Certificações:**"); [st.markdown(f"- 🏅 {c}") for c in cv.certificacoes]
+            if cv.fornecedores_principais:
+                st.markdown("**Fornecedores:**"); [st.markdown(f"- {f}") for f in cv.fornecedores_principais[:3]]
         st.markdown("---")
+
+    # Spider Chart
+    st.markdown("### 📊 Score Breakdown")
+    cch, ctb = st.columns([2, 1])
+    with cch:
+        b = d.sas_result.breakdown
+        cats = ["Músculo\n(Porte)", "Complexidade", "Gente\n(Gestão)", "Momento\n(Gov/Tech)"]
+        vals = [b.musculo, b.complexidade, b.gente, b.momento]
+        maxs = [400, 250, 200, 150]
+        pcts = [v/m*100 for v, m in zip(vals, maxs)]
+        fig = go.Figure(go.Scatterpolar(r=pcts+[pcts[0]], theta=cats+[cats[0]], fill='toself',
+                                         line_color='#1e3a5f', fillcolor='rgba(30,58,95,0.3)'))
+        fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], ticksuffix="%")),
+                          showlegend=False, height=350, margin=dict(l=60, r=60, t=30, b=30))
+        st.plotly_chart(fig, use_container_width=True)
+    with ctb:
+        df = pd.DataFrame([{"Pilar": "Músculo", "Pts": b.musculo, "Max": 400},
+                           {"Pilar": "Complexidade", "Pts": b.complexidade, "Max": 250},
+                           {"Pilar": "Gente", "Pts": b.gente, "Max": 200},
+                           {"Pilar": "Momento", "Pts": b.momento, "Max": 150}])
+        st.dataframe(df, hide_index=True, width="stretch")
+        st.markdown(f"**Total: {d.sas_result.score}/1000** — {d.sas_result.tier.value}")
+    if d.sas_result.justificativas:
+        with st.expander("🔍 Justificativas"):
+            for j in d.sas_result.justificativas: st.text(f"→ {j}")
+    st.markdown("---")
+
+    # Intel
+    il = d.intel_mercado
+    if il.noticias_recentes or il.sinais_compra:
+        st.markdown("### 📡 Inteligência de Mercado")
+        ti1, ti2, ti3 = st.tabs(["🎯 Sinais", "📰 Notícias", "⚠️ Riscos"])
+        with ti1:
+            for s in il.sinais_compra: st.markdown(f"- 🟢 {s}")
+            if il.dores_identificadas:
+                st.markdown("**Dores:**"); [st.markdown(f"- 🔴 {x}") for x in il.dores_identificadas]
+        with ti2:
+            for n in il.noticias_recentes:
+                if isinstance(n, dict):
+                    st.markdown(f"**{n.get('titulo','')}** ({n.get('data_aprox','')})"); st.caption(n.get('resumo',''))
+                else: st.markdown(f"- {n}")
+        with ti3:
+            cr1, co1 = st.columns(2)
+            with cr1: st.markdown("**Riscos:**"); [st.markdown(f"- {r}") for r in il.riscos]
+            with co1: st.markdown("**Oportunidades:**"); [st.markdown(f"- {o}") for o in il.oportunidades]
+        st.markdown("---")
+
+    # Análise
+    st.markdown("### 🧠 Inteligência Estratégica")
+    for sec in d.secoes_analise:
+        with st.expander(f"{sec.icone} {sec.titulo}", expanded=True):
+            st.markdown(sec.conteudo)
+    st.markdown("---")
+
+    # CNPJ
+    if d.dados_cnpj:
+        with st.expander("📋 Dados Cadastrais"):
+            dc = d.dados_cnpj
+            ca, cb = st.columns(2)
+            with ca:
+                st.markdown(f"**Razão:** {dc.razao_social}"); st.markdown(f"**Fantasia:** {dc.nome_fantasia}")
+                st.markdown(f"**CNPJ:** {formatar_cnpj(dc.cnpj)}"); st.markdown(f"**Situação:** {dc.situacao_cadastral}")
+            with cb:
+                st.markdown(f"**Nat. Jurídica:** {dc.natureza_juridica}"); st.markdown(f"**Capital:** R${dc.capital_social:,.2f}")
+                st.markdown(f"**CNAE:** {dc.cnae_principal} — {dc.cnae_descricao}")
+                st.markdown(f"**Local:** {dc.municipio}/{dc.uf}")
+            if dc.qsa:
+                st.markdown("**QSA:**"); st.dataframe(pd.DataFrame(dc.qsa), hide_index=True, width="stretch")
+
+    # Grupo Econômico
+    if gr.total_empresas > 0:
+        with st.expander("🏛️ Grupo Econômico"):
+            st.markdown(f"**Matriz:** {gr.cnpj_matriz}"); st.markdown(f"**Total:** {gr.total_empresas} empresas")
+            st.markdown(f"**Controladores:** {', '.join(gr.controladores)}")
+            if gr.cnpjs_coligadas:
+                st.markdown("**Coligadas:**"); [st.markdown(f"- {c}") for c in gr.cnpjs_coligadas]
+
+    # Quality
+    if d.quality_report:
+        with st.expander("✅ Quality Gate"):
+            for ch in d.quality_report.checks:
+                st.markdown(f"{'✅' if ch.passou else '❌'} **{ch.criterio}** — {ch.nota}")
+            if d.quality_report.audit_ia:
+                ai = d.quality_report.audit_ia
+                st.markdown(f"**Nota IA:** {ai.get('nota_final', 'N/A')}/10 — {ai.get('nivel', '')}")
+                if ai.get('scores'):
+                    for k, v in ai['scores'].items():
+                        if isinstance(v, dict): st.markdown(f"  - {k}: {v.get('nota', '')}/10 — {v.get('justificativa', '')}")
+            if d.quality_report.recomendacoes:
+                st.markdown("**Recomendações:**"); [st.markdown(f"- {r}") for r in d.quality_report.recomendacoes]
+
+    # Export
+    st.markdown("---")
+    st.markdown("### 📤 Exportar")
+    md = f"# Dossie: {nome}\n**Score:** {d.sas_result.score}/1000 — {d.sas_result.tier.value}\n\n"
+    for sec in d.secoes_analise: md += f"## {sec.icone} {sec.titulo}\n\n{sec.conteudo}\n\n---\n\n"
+    ex1, ex2, ex3 = st.columns(3)
+    with ex1:
+        st.download_button("📝 Markdown", md, f"dossie_{nome.replace(' ','_')}.md", "text/markdown", use_container_width=True)
+    with ex2:
+        jd = json.dumps({"empresa": nome, "score": d.sas_result.score, "tier": d.sas_result.tier.value,
+                         "breakdown": d.sas_result.breakdown.to_dict(), "hectares": op.hectares_total,
+                         "culturas": op.culturas, "financeiro": {"movimentos": fi.movimentos_financeiros,
+                         "fiagros": fi.fiagros_relacionados, "cras": fi.cras_emitidos}}, indent=2, ensure_ascii=False)
+        st.download_button("📊 JSON", jd, f"dossie_{nome.replace(' ','_')}.json", "application/json", use_container_width=True)
+    with ex3:
+        try:
+            pdf_path = gerar_pdf(d)
+            with open(pdf_path, "rb") as pf:
+                st.download_button("📕 PDF", pf.read(), f"dossie_{nome.replace(' ','_')}.pdf", "application/pdf", use_container_width=True)
+        except Exception as e:
+            st.warning(f"PDF indisponível: {e}")
+
+    # Log
+    with st.expander("🖥️ Pipeline Log"):
+        for l in st.session_state.logs: st.text(l)
         st.caption(f"Cache: {cache.stats} | Queue: {request_queue.stats}")
+```
+
+# === TAB COMPARADOR ===
+
+with tab_compare:
+st.header(“⚖️ Comparador de Leads”)
+if len(st.session_state.historico) < 2:
+st.info(“Investigue pelo menos 2 empresas para comparar.”)
+else:
+st.markdown(“Comparação lado a lado dos últimos leads investigados:”)
+hist = st.session_state.historico[-5:]
+df_comp = pd.DataFrame(hist)
+st.dataframe(df_comp, hide_index=True, width=“stretch”)
+if len(hist) >= 2:
+fig = go.Figure(go.Bar(x=[h[‘empresa’] for h in hist], y=[h[‘score’] for h in hist],
+marker_color=[’#1e3a5f’ if h[‘score’] >= 751 else ‘#2d5a87’ if h[‘score’] >= 501
+else ‘#6c757d’ if h[‘score’] >= 251 else ‘#adb5bd’ for h in hist],
+text=[h[‘tier’] for h in hist], textposition=‘auto’))
+fig.update_layout(title=“Score SAS 4.0 Comparativo”, yaxis_title=“Score”, height=400)
+st.plotly_chart(fig, use_container_width=True)
+
+# === TAB ARSENAL ===
+
+with tab_arsenal:
+st.header(“⚔️ Arsenal Tático”)
+tab_conc, tab_profiler = st.tabs([“🗡️ Matador de Concorrência”, “🧠 Profiler”])
+
+```
+with tab_conc:
+    st.markdown("Selecione o concorrente para ver argumentos de troca:")
+    conc = st.selectbox("Concorrente:", list(ARGUMENTOS_CONCORRENCIA.keys()),
+                        format_func=lambda x: ARGUMENTOS_CONCORRENCIA[x]['nome'])
+    if conc:
+        info = ARGUMENTOS_CONCORRENCIA[conc]
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(f"### ❌ Fraquezas do {info['nome']}")
+            for f in info['fraquezas']: st.markdown(f"- 🔴 {f}")
+        with c2:
+            st.markdown("### ✅ Vantagens Senior")
+            for v in info['senior_vantagem']: st.markdown(f"- 🟢 {v}")
+
+with tab_profiler:
+    st.markdown("Perfil do decisor baseado no tipo de empresa:")
+    tipo = st.selectbox("Tipo de operação:", ["Grande Grupo (10k+ ha)", "Usina Sucroenergética",
+                        "Cooperativa", "Pecuária Intensiva", "HF / Culturas Especiais", "Florestal / Celulose"])
+    perfis = {
+        "Grande Grupo (10k+ ha)": {"decisor": "CEO ou CFO", "perfil": "Executivo corporativo, orientado a resultado. Fala de ROI, TCO, integração. Quer referências de empresas do mesmo porte.", "abordagem": "Apresentação executiva, business case, referências de pares.", "objecoes": "Já tenho ERP / Custo de troca / Tempo de implementação"},
+        "Usina Sucroenergética": {"decisor": "Diretor Industrial ou CFO", "perfil": "Técnico, entende de processo. Quer saber de CTT, moagem, RenovaBio, manutenção.", "abordagem": "Demo técnica, visita a cliente referência, POC no módulo de manutenção.", "objecoes": "TOTVS está embarcado / Complexidade de troca em safra"},
+        "Cooperativa": {"decisor": "Presidente ou Dir. Administrativo", "perfil": "Político, precisa de consenso do conselho. Lento para decidir. Foca em custo e cooperado.", "abordagem": "Apresentação ao conselho, piloto com uma unidade, ROI cooperado.", "objecoes": "Sistema próprio / Assembleia precisa aprovar"},
+        "Pecuária Intensiva": {"decisor": "Dono ou Dir. Operações", "perfil": "Pragmático, quer simplicidade. Foca em rastreabilidade e custos. Decisão rápida.", "abordagem": "Demo de campo, mobilidade, rastreabilidade SISBOV.", "objecoes": "Planilha resolve / Operação é simples"},
+        "HF / Culturas Especiais": {"decisor": "Dono ou Gerente Geral", "perfil": "Operacional, hands-on. Foca em rastreabilidade, qualidade, RH sazonal.", "abordagem": "Demo de rastreabilidade, caso de varejo (GPA, Carrefour).", "objecoes": "Muito caro para meu porte / Complexo demais"},
+        "Florestal / Celulose": {"decisor": "Dir. Florestal ou CIO", "perfil": "Técnico, ciclo longo de decisão. Foca em inventário, manutenção pesada, ambiental.", "abordagem": "POC de manutenção, integração com GIS, compliance ambiental.", "objecoes": "SAP/Oracle já implantado / Ciclo de decisão de 12+ meses"},
+    }
+    p = perfis.get(tipo, {})
+    if p:
+        st.markdown(f"**Decisor:** {p['decisor']}")
+        st.markdown(f"**Perfil:** {p['perfil']}")
+        st.markdown(f"**Abordagem:** {p['abordagem']}")
+        st.markdown(f"**Objeções comuns:** {p['objecoes']}")
+```
