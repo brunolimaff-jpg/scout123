@@ -1,5 +1,3 @@
-app.py — Senior Scout 360 v3.1 (Full Pro, All Verticals, Visual Pipeline)
-“””
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(**file**)))
 
