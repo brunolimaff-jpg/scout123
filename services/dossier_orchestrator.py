@@ -261,10 +261,14 @@ def gerar_dossie_completo(empresa_alvo, api_key, cnpj="", log_cb=None, progress_
     s8.tempo_segundos = time.time() - t0; _step(s8)
 
     # P8.5: SCORE SAS
-    _prog(0.68, "📊 Calculando Score SAS 4.0...")
+    _prog(0.68, "📊 Calculando Score...")
     dados_m = d.merge_dados()
     dados_m['decisores'] = raw_dec
     dados_m['tech_stack'] = raw_tech
+    dados_m['grupo_economico'] = {'total_empresas': g.total_empresas}
+    dados_m['cadeia_valor'] = {'exporta': cv.exporta, 'certificacoes': cv.certificacoes}
+    dados_m['natureza_juridica'] = d.dados_cnpj.natureza_juridica if d.dados_cnpj else ''
+    dados_m['qsa_count'] = len(d.dados_cnpj.qsa) if d.dados_cnpj else 0
     d.sas_result = calcular_sas(dados_m)
     _log(f"Score: {d.sas_result.score}/1000 — {d.sas_result.tier.value}")
 
@@ -279,7 +283,7 @@ def gerar_dossie_completo(empresa_alvo, api_key, cnpj="", log_cb=None, progress_
     texto = agent_analise_estrategica(client, dados_a, sas_d, ctx)
     d.analise_bruta = texto
     d.secoes_analise = _parse_secoes(texto)
-    d.modelo_usado = "gemini-2.5-pro (todos os agentes)"
+    d.modelo_usado = "Senior Scout 360 Intelligence Platform"
     nw = sum(len(s.conteudo.split()) for s in d.secoes_analise)
     s9.status = "success"; s9.resumo = f"{len(d.secoes_analise)} secoes | {nw} palavras"
     s9.tempo_segundos = time.time() - t0; _step(s9)

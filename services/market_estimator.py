@@ -1,5 +1,6 @@
 """
-services/market_estimator.py — SAS 4.0 Full (12+ faixas, todas verticais)
+services/market_estimator.py — SAS 5.0 Engine (Verticais, Confidence, Recomendacao)
+Baseado no motor Realpolitik com verticais GRAOS/BIOENERGIA/SEMENTES/PECUARIA
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -7,176 +8,299 @@ import math
 from typing import Optional
 from scout_types import SASResult, SASBreakdown, Tier, Verticalizacao
 
+# ==========================================
+# SCORING CONFIG POR VERTICAL
+# ==========================================
+SCORING_CONFIG = {
+    "GRAOS": {
+        "musculo": {
+            "hectares": [(70000,200),(20000,150),(5000,100),(1000,50)],
+            "capital": [(200000000,150),(80000000,110),(20000000,50)],
+        },
+        "complexidade": {
+            "signals": {"tem_algodao":80,"tem_irrigacao":40,"tem_silos":40,"tem_agroindustria":30},
+            "base": 30,
+        },
+        "confidence": {"hectares":30,"capital_social":20,"vertical":20,"cnpj":15,"basic":15},
+    },
+    "BIOENERGIA": {
+        "musculo": {
+            "moagem": [(4000000,200),(2000000,150),(1000000,100)],
+            "capital": [(200000000,150),(50000000,100)],
+        },
+        "complexidade": {
+            "signals": {"tem_agroindustria":70,"certificacao_renovabio":50,"tem_silos":30},
+            "base": 50,
+        },
+        "confidence": {"moagem":35,"capital_social":20,"basic":45},
+    },
+    "SEMENTES": {
+        "musculo": {
+            "capital_primary": [(80000000,200),(20000000,150),(5000000,80)],
+        },
+        "complexidade": {
+            "signals": {"tem_hub_royalties":90,"tem_laboratorio":50,"renasem_ativo":40,"tem_silos":30},
+            "base": 40,
+        },
+        "confidence": {"renasem":30,"capital_social":30,"hub":20,"basic":20},
+    },
+    "PECUARIA": {
+        "musculo": {
+            "cabecas": [(20000,200),(10000,150),(5000,100)],
+            "capital": [(50000000,150),(10000000,80)],
+        },
+        "complexidade": {
+            "signals": {"tem_boitel":100,"tem_fabrica_racao":60,"tem_confinamento":40},
+            "base": 10,
+        },
+        "confidence": {"cabecas":35,"boitel":25,"capital_social":20,"basic":20},
+    },
+}
 
-def _lk_capital(v: float) -> tuple[int, str]:
-    if v >= 500_000_000: return 200, f"R${v/1e6:.0f}M → Mega Corporação"
-    if v >= 200_000_000: return 190, f"R${v/1e6:.0f}M → Corporação"
-    if v >= 100_000_000: return 175, f"R${v/1e6:.0f}M → Grande Empresa"
-    if v >= 50_000_000:  return 150, f"R${v/1e6:.0f}M → Empresa Consolidada"
-    if v >= 20_000_000:  return 120, f"R${v/1e6:.0f}M → Médio-Grande"
-    if v >= 10_000_000:  return 100, f"R${v/1e6:.0f}M → Média Empresa"
-    if v >= 5_000_000:   return 70,  f"R${v/1e6:.1f}M → PME Robusta"
-    if v >= 2_000_000:   return 50,  f"R${v/1e6:.1f}M → PME"
-    if v >= 1_000_000:   return 40,  f"R${v/1e6:.1f}M → Pequena"
-    if v >= 500_000:     return 25,  f"R${v/1e3:.0f}k → Micro-Pequena"
-    if v > 0:            return 10,  f"R${v/1e3:.0f}k → Micro"
-    return 0, "Sem dados de capital"
+CAPS = {"musculo": 400, "complexidade": 250, "gente": 200, "momento": 150}
 
-def _lk_hectares(v: int) -> tuple[int, str]:
-    if v >= 200_000: return 200, f"{v:,}ha → Mega-operação"
-    if v >= 100_000: return 195, f"{v:,}ha → Gigante"
-    if v >= 50_000:  return 180, f"{v:,}ha → Muito Grande"
-    if v >= 20_000:  return 150, f"{v:,}ha → Grande"
-    if v >= 10_000:  return 130, f"{v:,}ha → Consolidado"
-    if v >= 5_000:   return 100, f"{v:,}ha → Médio-Grande"
-    if v >= 3_000:   return 80,  f"{v:,}ha → Médio"
-    if v >= 1_000:   return 50,  f"{v:,}ha → Pequeno-Médio"
-    if v >= 500:     return 30,  f"{v:,}ha → Pequeno"
-    if v > 0:        return 10,  f"{v:,}ha → Micro"
-    return 0, "Sem dados de área"
+# ==========================================
+# HELPERS
+# ==========================================
+def _lookup(value, thresholds):
+    for threshold, points in thresholds:
+        if value >= threshold:
+            return points
+    return 0
 
-def _lk_cultura(culturas: list[str]) -> tuple[int, str]:
-    if not culturas:
-        return 50, "Culturas não identificadas"
-    txt = " ".join(culturas).lower()
-    scores = {
-        "cana": 150, "usina": 150, "semente": 140, "sementes": 140,
-        "algod": 130, "café": 125, "cafe": 125, "citrus": 120, "laranja": 120,
-        "alho": 120, "batata": 115, "hf": 110, "hortifruti": 110,
-        "pecuária": 105, "pecuaria": 105, "gado": 105, "boi": 105, "leite": 100,
-        "aves": 110, "frango": 110, "suínos": 110, "suinos": 110,
-        "camarão": 110, "peixe": 105, "tilapia": 105,
-        "eucalipto": 100, "pinus": 100, "celulose": 120, "florestal": 100,
-        "soja": 80, "milho": 80, "trigo": 75, "arroz": 75,
-        "feijão": 60, "feijao": 60, "fumo": 90, "tabaco": 90,
-        "cacau": 100, "dendê": 95, "dende": 95, "palma": 95,
+def _detect_vertical(dados):
+    """Detecta vertical com base nos dados disponveis."""
+    vert = dados.get('verticalizacao')
+    culturas = " ".join(dados.get('culturas', [])).lower()
+    has_graos = any(x in culturas for x in ['soja', 'milho', 'algod', 'sorgo', 'trigo', 'feijao'])
+    has_cana = 'cana' in culturas
+    # Pure bioenergia: cana without grains
+    if has_cana and not has_graos:
+        return "BIOENERGIA"
+    # Pecuaria
+    if dados.get('cabecas_gado', 0) > 1000:
+        return "PECUARIA"
+    if vert and (getattr(vert, 'frigorifico_bovino', False) or getattr(vert, 'frigorifico_aves', False)):
+        if not has_graos: return "PECUARIA"
+    # Sementes
+    if vert and (getattr(vert, 'sementeira', False) or getattr(vert, 'laboratorio_genetica', False)):
+        if not has_graos: return "SEMENTES"
+    # Default: GRAOS (covers mixed agro+industrial like Alvorada)
+    return "GRAOS"
+
+def _compute_musculo(dados, v_config):
+    pts = 0
+    just = []
+    # Hectares
+    ha = dados.get('hectares_total', 0)
+    if ha > 0 and "hectares" in v_config.get("musculo", {}):
+        p = _lookup(ha, v_config["musculo"]["hectares"])
+        pts = max(pts, p)
+        just.append(f"{ha:,}ha={p}pts")
+    # Capital
+    cap = dados.get('capital_social_estimado', 0) or dados.get('capital_social', 0)
+    if cap > 0:
+        for key in ["capital", "capital_primary"]:
+            if key in v_config.get("musculo", {}):
+                p = _lookup(cap, v_config["musculo"][key])
+                if key == "capital_primary":
+                    pts = max(pts, p)
+                else:
+                    pts = max(pts, p)
+                just.append(f"R${cap/1e6:.0f}M={p}pts")
+                break
+    # Cabecas gado
+    cab = dados.get('cabecas_gado', 0)
+    if cab > 0 and "cabecas" in v_config.get("musculo", {}):
+        p = _lookup(cab, v_config["musculo"]["cabecas"])
+        pts = max(pts, p)
+        just.append(f"{cab:,}cab={p}pts")
+    # Moagem
+    moag = dados.get('moagem_ton', 0)
+    if moag > 0 and "moagem" in v_config.get("musculo", {}):
+        p = _lookup(moag, v_config["musculo"]["moagem"])
+        pts = max(pts, p)
+        just.append(f"{moag:,}ton={p}pts")
+    return min(pts, CAPS["musculo"]), "; ".join(just) or "Sem dados"
+
+def _compute_complexidade(dados, v_config):
+    c = v_config.get("complexidade", {})
+    score = c.get("base", 0)
+    labels = []
+    vert = dados.get('verticalizacao')
+    # Signals from config
+    for signal, weight in c.get("signals", {}).items():
+        val = False
+        if vert and hasattr(vert, signal):
+            val = getattr(vert, signal, False)
+        elif dados.get(signal):
+            val = True
+        # Derive from culturas
+        if signal == "tem_algodao" and not val:
+            val = "algod" in " ".join(dados.get('culturas', [])).lower()
+        if signal == "tem_irrigacao" and not val and vert:
+            val = getattr(vert, 'pivos_centrais', False) or getattr(vert, 'irrigacao_gotejamento', False)
+        if val:
+            score += weight
+            labels.append(f"{signal}(+{weight})")
+    # Extra vert bonus (beyond config signals)
+    if vert:
+        extra_map = {
+            'silos':15,'armazens_gerais':15,'terminal_portuario':25,'frota_propria':15,
+            'algodoeira':25,'sementeira':20,'secador':10,
+            'usina_acucar_etanol':35,'destilaria':25,'esmagadora_soja':30,
+            'fabrica_biodiesel':25,'fabrica_racao':20,'cogeracao_energia':25,
+            'frigorifico_bovino':30,'frigorifico_aves':25,'laticinio':20,
+            'fabrica_celulose':30,'creditos_carbono':15,
+            'agricultura_precisao':10,'drones_proprios':8,'telemetria_frota':8,
+        }
+        for campo, val in extra_map.items():
+            if getattr(vert, campo, False) and campo not in [s for s in c.get("signals", {})]:
+                score += val
+                labels.append(campo)
+    return min(score, CAPS["complexidade"]), "; ".join(labels[:6]) or "Baixa complexidade"
+
+def _compute_gente(dados):
+    funcs = dados.get('funcionarios_estimados', 0)
+    score = _lookup(funcs, [(2000,200),(1000,180),(500,150),(200,120),(100,90),(50,60),(20,30)])
+    # Natureza juridica
+    nat = str(dados.get('natureza_juridica', '')).lower()
+    if 's.a.' in nat or 'anonima' in nat:
+        score += 80
+    elif 'ltda' in nat:
+        score += 30
+        cap = dados.get('capital_social_estimado', 0) or dados.get('capital_social', 0)
+        if cap > 50_000_000:
+            score += 40  # Governanca familiar
+    label = f"{funcs:,} funcs" if funcs else "N/I"
+    return min(score, CAPS["gente"]), label
+
+def _compute_momento(dados):
+    score = 0
+    labels = []
+    # Vagas TI
+    vagas = 0
+    ts = dados.get('tech_stack', {})
+    if ts:
+        vagas = len(ts.get('vagas_ti_abertas', []))
+    score += _lookup(vagas, [(4,60),(1,30)])
+    if vagas: labels.append(f"{vagas} vagas TI")
+    # Dominio/conectividade
+    techs = " ".join(str(x) for x in dados.get('tecnologias_identificadas', [])).lower()
+    if any(x in techs for x in ['site', 'dominio', 'web']): score += 20; labels.append("Dominio")
+    if any(x in techs for x in ['conectividade', 'fibra', 'starlink', 'internet']): score += 40; labels.append("Conectividade")
+    # SA bonus
+    nat = str(dados.get('natureza_juridica', '')).lower()
+    if 's.a.' in nat or 'anonima' in nat: score += 30; labels.append("S.A.")
+    # Financial governance signals
+    govs = " ".join(str(d) for d in [datos.get('movimentos_financeiros',''), datos.get('fiagros',''),
+                                      datos.get('cras',''), datos.get('parceiros_financeiros','')]).lower() \
+        if (datos := dados) else ""
+    if 'fiagro' in govs: score += 25; labels.append("Fiagro")
+    if 'cra' in govs: score += 20; labels.append("CRA")
+    if any(x in govs for x in ['auditoria','kpmg','ey','deloitte','pwc']): score += 15; labels.append("Auditoria")
+    # Grupo economico
+    grp = dados.get('grupo_economico', {})
+    if isinstance(grp, dict) and grp.get('total_empresas', 0) >= 5: score += 15; labels.append(f"Grupo {grp['total_empresas']}emp")
+    # Exportacao
+    cadeia = dados.get('cadeia_valor', {})
+    if isinstance(cadeia, dict) and cadeia.get('exporta'): score += 10; labels.append("Exporta")
+    return min(score, CAPS["momento"]), "; ".join(labels) or "Sem sinais"
+
+def _compute_confidence(dados, v_config):
+    """Compute confidence score 0-100 based on available data."""
+    total_w = 0
+    found_w = 0
+    checks = {
+        "hectares": dados.get('hectares_total', 0) > 0,
+        "capital_social": (dados.get('capital_social_estimado', 0) or dados.get('capital_social', 0)) > 0,
+        "vertical": True,  # always have vertical
+        "cnpj": bool(dados.get('cnpj') or dados.get('razao_social')),
+        "basic": bool(dados.get('razao_social')),
+        "moagem": dados.get('moagem_ton', 0) > 0,
+        "cabecas": dados.get('cabecas_gado', 0) > 0,
+        "renasem": bool(dados.get('renasem_ativo')),
+        "hub": bool(dados.get('tem_hub_royalties')),
+        "boitel": bool(dados.get('tem_boitel')),
     }
-    best, label = 50, "Culturas genéricas"
-    for kw, sc in scores.items():
-        if kw in txt and sc > best:
-            best, label = sc, f"Cultura: {kw}"
-    n = len(set(culturas))
-    if n >= 5:
-        best = min(best + 40, 150)
-        label += f" +{n} culturas (altamente diversificado)"
-    elif n >= 3:
-        best = min(best + 20, 150)
-        label += f" +{n} culturas"
-    return best, label
+    for field, w in v_config.get("confidence", {}).items():
+        total_w += w
+        if checks.get(field, False):
+            found_w += w
+    return (found_w / total_w * 100) if total_w > 0 else 50
 
-def _lk_vert(vert) -> tuple[int, str]:
-    if vert is None:
-        return 0, "Sem dados"
-    pts_map = {
-        'agroindustria': 35, 'usina_acucar_etanol': 40, 'destilaria': 30,
-        'esmagadora_soja': 35, 'refinaria_oleo': 30, 'fabrica_biodiesel': 25,
-        'torrefacao_cafe': 25, 'beneficiamento_arroz': 20, 'fabrica_sucos': 25,
-        'vinicultura': 20, 'frigorifico_bovino': 35, 'frigorifico_aves': 35,
-        'frigorifico_suinos': 30, 'frigorifico_peixes': 25, 'laticinio': 30,
-        'fabrica_racao': 25, 'incubatorio': 20,
-        'silos': 20, 'armazens_gerais': 15, 'terminal_portuario': 30,
-        'ferrovia_propria': 25, 'frota_propria': 10,
-        'algodoeira': 25, 'sementeira': 25, 'ubs': 20, 'secador': 10,
-        'fabrica_fertilizantes': 30, 'fabrica_defensivos': 25,
-        'laboratorio_genetica': 20, 'central_inseminacao': 15, 'viveiro_mudas': 10,
-        'cogeracao_energia': 30, 'usina_solar': 15, 'biodigestor': 20,
-        'planta_biogas': 20, 'creditos_carbono': 15,
-        'florestal_eucalipto': 15, 'florestal_pinus': 10,
-        'fabrica_celulose': 35, 'serraria': 15,
-        'pivos_centrais': 15, 'irrigacao_gotejamento': 10, 'barragem_propria': 15,
-        'agricultura_precisao': 15, 'drones_proprios': 10,
-        'estacoes_meteorologicas': 5, 'telemetria_frota': 10, 'erp_implantado': 10,
-    }
-    pts, labels = 0, []
-    for campo, val in pts_map.items():
-        if getattr(vert, campo, False):
-            pts += val
-            labels.append(campo)
-    pts = min(pts, 100)
-    return pts, ", ".join(labels[:5]) + (f" +{len(labels)-5} mais" if len(labels) > 5 else "") if labels else "Não verticalizado"
-
-def _lk_funcs(v: int) -> tuple[int, str]:
-    if v >= 2000: return 200, f"{v:,} funcs → Mega empregador"
-    if v >= 1000: return 180, f"{v:,} funcs → Corporação"
-    if v >= 500:  return 150, f"{v:,} funcs → Grande"
-    if v >= 200:  return 120, f"{v:,} funcs → Médio-Grande"
-    if v >= 100:  return 90,  f"{v:,} funcs → Médio"
-    if v >= 50:   return 60,  f"{v:,} funcs → Pequeno-Médio"
-    if v >= 20:   return 30,  f"{v:,} funcs → Pequeno"
-    if v > 0:     return 15,  f"{v} funcs → Micro"
-    return 0, "Sem dados"
-
-def _lk_gov(d: dict) -> tuple[int, str]:
-    pts, labels = 0, []
-    all_fin = " ".join(str(d.get(k, '')) for k in
-                       ['movimentos_financeiros', 'fiagros', 'cras', 'parceiros_financeiros']).lower()
-    if 'fiagro' in all_fin: pts += 35; labels.append("Fiagro")
-    if 'cra' in all_fin: pts += 30; labels.append("CRA")
-    if 'auditoria' in all_fin or d.get('governanca'): pts += 25; labels.append("Governança")
-    if any(x in all_fin for x in ['xp', 'suno', 'valora', 'itaú', 'btg', 'bndes']): pts += 20; labels.append("Parceiro financeiro")
-    techs = str(d.get('tecnologias', '')).lower()
-    if any(x in techs for x in ['erp', 'senior', 'sap', 'totvs']): pts += 15; labels.append("ERP")
-    if any(x in techs for x in ['precisão', 'drone', 'telemetria', 'iot']): pts += 10; labels.append("Ag-tech")
-    nat = str(d.get('natureza_juridica', '')).lower()
-    if 's.a.' in nat or 'anônima' in nat or 'anonima' in nat: pts += 20; labels.append("S.A.")
-    qsa = d.get('qsa_count', 0)
-    if qsa >= 5: pts += 10; labels.append(f"QSA:{qsa}")
-    grp = d.get('grupo_economico', {})
-    if grp.get('total_empresas', 0) >= 3: pts += 15; labels.append(f"Grupo:{grp['total_empresas']} empresas")
-    cadeia = d.get('cadeia_valor', {})
-    if cadeia.get('exporta'): pts += 10; labels.append("Exportador")
-    if len(cadeia.get('certificacoes', [])) >= 2: pts += 10; labels.append("Certificado")
-    return min(pts, 150), "; ".join(labels) if labels else "Sem sinais"
-
-
-def _heuristic(d: dict) -> tuple[dict, list[str]]:
+def _heuristic(d):
     inf = []
     ha = d.get('hectares_total', 0)
     if d.get('funcionarios_estimados', 0) == 0 and ha > 0:
         ct = " ".join(d.get('culturas', [])).lower()
-        f = 120 if any(x in ct for x in ['cana', 'batata', 'alho', 'semente', 'hf', 'café', 'cafe']) else \
-            200 if any(x in ct for x in ['algod', 'laranja', 'citrus', 'café']) else 350
+        f = 120 if any(x in ct for x in ['cana','semente','hf','cafe']) else 200 if 'algod' in ct else 350
         est = max(math.ceil(ha / f), d.get('cabecas_gado', 0) // 500 or 0)
-        if d.get('cabecas_aves', 0) > 0:
-            est += d['cabecas_aves'] // 50000
+        if d.get('cabecas_aves', 0) > 0: est += d['cabecas_aves'] // 50000
         d['funcionarios_estimados'] = est
         inf.append(f"Funcs estimados: ~{est}")
     if d.get('capital_social_estimado', 0) == 0 and ha > 0:
-        r = str(d.get('regioes_atuacao', '')).lower()
-        vha = 5000 if any(x in r for x in ['sp', 'pr', 'rs']) else 3500 if any(x in r for x in ['mt', 'ba', 'go']) else 2500
+        vha = 3500
         d['capital_social_estimado'] = ha * vha
         inf.append(f"Capital estimado: R${ha*vha/1e6:.1f}M")
-    if d.get('faturamento_estimado', 0) == 0 and ha > 0:
-        d['faturamento_estimado'] = ha * 5000
-        inf.append(f"Faturamento estimado: R${ha*5000/1e6:.1f}M")
     return d, inf
 
 
+# ==========================================
+# MAIN
+# ==========================================
 def calcular_sas(dados: dict) -> SASResult:
     dados, inf = _heuristic(dados)
     just = list(inf)
 
-    cap_p, cap_l = _lk_capital(dados.get('capital_social_estimado', 0) or dados.get('capital_social', 0))
-    hec_p, hec_l = _lk_hectares(dados.get('hectares_total', 0))
-    musculo = min(cap_p + hec_p, 400)
-    just.append(f"Músculo: {cap_l} ({cap_p}) + {hec_l} ({hec_p}) = {musculo}/400")
+    # Detect vertical
+    vertical = _detect_vertical(dados)
+    v_config = SCORING_CONFIG.get(vertical, SCORING_CONFIG["GRAOS"])
 
-    cul_p, cul_l = _lk_cultura(dados.get('culturas', []))
-    ver_p, ver_l = _lk_vert(dados.get('verticalizacao'))
-    complexidade = min(cul_p + ver_p, 250)
-    just.append(f"Complexidade: {cul_l} ({cul_p}) + Vert ({ver_p}) = {complexidade}/250")
+    # Compute pillars
+    musc, musc_l = _compute_musculo(dados, v_config)
+    comp, comp_l = _compute_complexidade(dados, v_config)
+    gent, gent_l = _compute_gente(dados)
+    mome, mome_l = _compute_momento(dados)
 
-    fun_p, fun_l = _lk_funcs(dados.get('funcionarios_estimados', 0))
-    gente = min(fun_p, 200)
-    just.append(f"Gente: {fun_l} = {gente}/200")
+    just.append(f"Vertical: {vertical}")
+    just.append(f"Musculo: {musc_l} = {musc}/{CAPS['musculo']}")
+    just.append(f"Complexidade: {comp_l} = {comp}/{CAPS['complexidade']}")
+    just.append(f"Gente: {gent_l} = {gent}/{CAPS['gente']}")
+    just.append(f"Momento: {mome_l} = {mome}/{CAPS['momento']}")
 
-    gov_p, gov_l = _lk_gov(dados)
-    momento = min(gov_p, 150)
-    just.append(f"Momento: {gov_l} = {momento}/150")
+    raw = musc + comp + gent + mome
 
-    total = musculo + complexidade + gente + momento
-    tier = Tier.DIAMANTE if total >= 751 else Tier.OURO if total >= 501 else Tier.PRATA if total >= 251 else Tier.BRONZE
+    # Confidence penalty
+    conf = _compute_confidence(dados, v_config)
+    penalty = 1.0
+    if conf < 30: penalty = 0.5
+    elif conf < 50: penalty = 0.75
+    elif conf < 70: penalty = 0.90
+    score = int(raw * penalty)
+    if penalty < 1.0:
+        just.append(f"Confidence: {conf:.0f}% -> penalty {penalty}")
 
-    return SASResult(score=total, tier=tier,
-                     breakdown=SASBreakdown(musculo=musculo, complexidade=complexidade, gente=gente, momento=momento),
-                     dados_inferidos=len(inf) > 0, justificativas=just)
+    # Tier
+    tier = Tier.DIAMANTE if score >= 751 else Tier.OURO if score >= 501 else Tier.PRATA if score >= 251 else Tier.BRONZE
+
+    # Recomendacao comercial (Fit Matrix)
+    mc = musc + comp
+    gm = gent + mome
+    if mc > 400 and gm > 250:
+        reco = "BALEIA IDEAL (Field Sales)"
+    elif comp > 150 and musc < 200:
+        reco = "DOR LATENTE (Inside Sales)"
+    elif musc > 250 and comp < 100:
+        reco = "GIGANTE INERTE (Nutrir/Mkt)"
+    elif gm > 250:
+        reco = "TECH FIT (Governanca)"
+    else:
+        reco = "OPORTUNIDADE (Qualificacao)"
+
+    return SASResult(
+        score=score, tier=tier,
+        breakdown=SASBreakdown(musculo=musc, complexidade=comp, gente=gent, momento=mome),
+        dados_inferidos=len(inf) > 0, justificativas=just,
+        confidence_score=conf, recomendacao_comercial=reco, vertical_detectada=vertical,
+    )
