@@ -1,6 +1,8 @@
 """
-services/quality_gate.py — Auditor de Qualidade Determinístico
+services/quality_gate.py — Auditor de Qualidade Deterministico
 """
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import time
 from scout_types import QualityReport, QualityCheck, QualityLevel, DossieCompleto
 

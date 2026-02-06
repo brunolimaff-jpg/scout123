@@ -1,6 +1,8 @@
 """
 services/cnpj_service.py — BrasilAPI + ReceitaWS com retry
 """
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import re, requests, time
 from typing import Optional
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type

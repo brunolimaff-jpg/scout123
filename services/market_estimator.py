@@ -1,6 +1,8 @@
 """
 services/market_estimator.py — SAS 4.0 Full (12+ faixas, todas verticais)
 """
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import math
 from typing import Optional
 from scout_types import SASResult, SASBreakdown, Tier, Verticalizacao

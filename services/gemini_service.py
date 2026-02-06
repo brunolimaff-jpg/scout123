@@ -2,6 +2,8 @@
 services/gemini_service.py — Motor IA v3.2 (ALL Pro, 9 Agents)
 Inclui: Profiler Decisores, Tech Stack Hunter, Portfolio Senior/Gatec
 """
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import json, re, time
 from typing import Optional, Any
 from google import genai

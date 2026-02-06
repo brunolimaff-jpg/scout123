@@ -1,6 +1,8 @@
 """
 services/dossier_orchestrator.py — Pipeline 10 Passos v3.2
 """
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import json, time
 from typing import Optional, Callable
 from google import genai
