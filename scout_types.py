@@ -1,44 +1,10 @@
 """
 scout_types.py — Contrato de Dados v3.1 (Full Agro Verticals)
-VERSÃO v0.2 - SAS 4.0 Calibrado para Ticket 500k+
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
-
-
-# ============================================================================
-# CONFIGURAÇÃO SAS 4.0 v0.2 - Calibrado para Ticket 500k / Ciclo 90 dias
-# ============================================================================
-
-# Verticals core (Pecuária REMOVIDA - não é core para ticket 500k+)
-VERTICALS_CORE = {
-    'Bioenergia': 150,    # Usinas, destilarias, cogeração
-    'Sementes': 130,      # Multiplicação, royalties, rastreabilidade genética
-    'Grãos': 110,         # ⬆️ ajustado de 80 (soja, milho, sorgo)
-    'Algodão': 140,       # ✅ NOVO - complexidade industrial (UBA, HVI, ABR)
-}
-
-# Pesos dos pilares (v0.2 - melhor correlação com comprabilidade)
-PESOS_PILARES_V2 = {
-    'musculo': 350,       # ⬇️ -50 (reduz peso de tamanho bruto)
-    'complexidade': 250,  # ✅ mantém
-    'gente': 220,         # ⬆️ +20 (governança é chave para ticket 500k)
-    'momento': 180        # ⬆️ +30 (TI/digital prediz momento de compra)
-}
-
-# Tiers recalibrados (v0.2 - dispersão saudável, menos inflação de OURO)
-TIERS_V2 = {
-    'DIAMANTE': 820,  # ⬆️ mais seletivo (era 751)
-    'OURO': 650,      # ⬆️ (era 501)
-    'PRATA': 430,     # ⬆️ (era 251)
-    'BRONZE': 0
-}
-
-# Detectar Algodão via CNAE ou keywords
-CNAE_ALGODAO = ['0115-6/00', '0115-6']
-KEYWORDS_ALGODAO = ['algodão', 'algodao', 'cotton', 'algodoeira', 'uba', 'hvi', 'abr', 'beneficiamento']
 
 
 class Tier(str, Enum):
@@ -293,6 +259,9 @@ class SASResult:
     breakdown: SASBreakdown = field(default_factory=SASBreakdown)
     dados_inferidos: bool = False
     justificativas: list[str] = field(default_factory=list)
+    confidence_score: float = 0.0
+    recomendacao_comercial: str = ""
+    vertical_detectada: str = ""
 
 
 @dataclass
