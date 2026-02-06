@@ -72,14 +72,25 @@ def _parse_cadeia(raw):
         confianca=float(raw.get('confianca',0) or 0))
 
 def _parse_grupo(raw):
+    # controladores pode vir como list[str] ou list[dict]
+    ctrls_raw = raw.get('controladores', []) or []
+    ctrls = []
+    for c in ctrls_raw:
+        if isinstance(c, dict):
+            ctrls.append(c.get('nome', c.get('razao_social', str(c))))
+        else:
+            ctrls.append(str(c))
+    # filiais e coligadas podem vir como list[dict] ou list[str]
+    filiais = raw.get('filiais', []) or raw.get('cnpjs_filiais', []) or []
+    coligadas = raw.get('coligadas', []) or raw.get('cnpjs_coligadas', []) or []
     return GrupoEconomico(
-        cnpj_matriz=raw.get('cnpj_matriz',''),
-        cnpjs_filiais=raw.get('filiais',[]) or raw.get('cnpjs_filiais',[]) or [],
-        cnpjs_coligadas=raw.get('coligadas',[]) or raw.get('cnpjs_coligadas',[]) or [],
-        total_empresas=int(raw.get('total_empresas',0) or 0),
-        controladores=raw.get('controladores',[]) or [],
-        holding_controladora=raw.get('holding_controladora',''),
-        confianca=float(raw.get('confianca',0) or 0))
+        cnpj_matriz=raw.get('cnpj_matriz', ''),
+        cnpjs_filiais=filiais,
+        cnpjs_coligadas=coligadas,
+        total_empresas=int(raw.get('total_empresas', 0) or 0),
+        controladores=ctrls,
+        holding_controladora=raw.get('holding_controladora', ''),
+        confianca=float(raw.get('confianca', 0) or 0))
 
 def _parse_intel(raw):
     return IntelMercado(
@@ -190,7 +201,7 @@ def gerar_dossie_completo(empresa_alvo, api_key, cnpj="", log_cb=None, progress_
     s5.status = "success"; s5.confianca = g.confianca
     nfil = len(g.cnpjs_filiais); ncol = len(g.cnpjs_coligadas)
     s5.resumo = f"{g.total_empresas} empresas | {nfil} filiais | {ncol} coligadas"
-    s5.detalhes = [f"Controladores: {', '.join(g.controladores[:3]) or 'N/I'}"]
+    s5.detalhes = [f"Controladores: {', '.join(str(c) for c in g.controladores[:3]) or 'N/I'}"]
     if g.holding_controladora: s5.detalhes.append(f"Holding: {g.holding_controladora}")
     s5.tempo_segundos = time.time() - t0; _step(s5)
 
