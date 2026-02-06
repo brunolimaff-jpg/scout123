@@ -15,6 +15,12 @@ from utils.market_intelligence import ARGUMENTOS_CONCORRENCIA
 from utils.pdf_export import gerar_pdf
 from scout_types import DossieCompleto, Tier, QualityLevel
 
+def _sj(lst, n=None):
+    """Safe join: converts any list items to str."""
+    if not lst: return ''
+    items = lst[:n] if n else lst
+    return ', '.join(str(x) if not isinstance(x, dict) else x.get('nome', x.get('titulo', x.get('sistema', str(x)))) for x in items)
+
 st.set_page_config(page_title="Senior Scout 360 v3.2", page_icon="🕵️", layout="wide")
 
 FRASES = ["🛰️ Ativando satelites...","📡 9 agentes Pro em campo...","💰 Rastreando CRAs...",
@@ -135,8 +141,8 @@ with tab_scout:
             desc_parts = []
             desc_parts.append(f"**{nome}** e um grupo do agronegocio brasileiro")
             if op.hectares_total: desc_parts.append(f"com **{op.hectares_total:,} hectares**")
-            if op.culturas: desc_parts.append(f"atuando em **{', '.join(op.culturas)}**")
-            if op.regioes_atuacao: desc_parts.append(f"nas regioes **{', '.join(op.regioes_atuacao)}**")
+            if op.culturas: desc_parts.append(f"atuando em **{_sj(op.culturas)}**")
+            if op.regioes_atuacao: desc_parts.append(f"nas regioes **{_sj(op.regioes_atuacao)}**")
             if fi.funcionarios_estimados: desc_parts.append(f"com aproximadamente **{fi.funcionarios_estimados:,} funcionarios**")
             if fi.faturamento_estimado: desc_parts.append(f"e faturamento estimado de **R${fi.faturamento_estimado/1e6:.0f}M**")
             st.markdown(" ".join(desc_parts) + ".")
@@ -144,9 +150,9 @@ with tab_scout:
             if cv.posicao_cadeia:
                 st.markdown(f"**Posicao na cadeia:** {cv.posicao_cadeia} | **Integracao:** {cv.integracao_vertical_nivel}")
             if cv.exporta:
-                st.markdown(f"**Exportacao:** {', '.join(cv.mercados_exportacao[:5])}")
+                st.markdown(f"**Exportacao:** {_sj(cv.mercados_exportacao, 5)}")
             if cv.certificacoes:
-                st.markdown(f"**Certificacoes:** {', '.join(cv.certificacoes)}")
+                st.markdown(f"**Certificacoes:** {_sj(cv.certificacoes)}")
         with cp2:
             if d.dados_cnpj:
                 dc = d.dados_cnpj
@@ -176,7 +182,7 @@ with tab_scout:
         mc[0].metric("Area", f"{op.hectares_total:,} ha" if op.hectares_total else "N/D")
         mc[1].metric("Funcionarios", f"{fi.funcionarios_estimados:,}" if fi.funcionarios_estimados else "N/D")
         mc[2].metric("Capital", f"R${fi.capital_social_estimado/1e6:.1f}M" if fi.capital_social_estimado else "N/D")
-        mc[3].metric("Culturas", ", ".join(op.culturas[:3]) if op.culturas else "N/D")
+        mc[3].metric("Culturas", _sj(op.culturas, 3) if op.culturas else "N/D")
         mc[4].metric("Fazendas", str(op.numero_fazendas) if op.numero_fazendas else "N/D")
         mc[5].metric("Grupo", f"{gr.total_empresas} emp" if gr.total_empresas else "N/D")
         st.markdown("---")
@@ -225,7 +231,7 @@ with tab_scout:
                 vagas = ts.get('vagas_ti_abertas', [])
                 if vagas:
                     st.markdown("**Vagas TI abertas:**")
-                    for v in vagas: st.markdown(f"- 📋 {v.get('titulo','')} ({', '.join(v.get('sistemas_mencionados',[]))})")
+                    for v in vagas: st.markdown(f"- 📋 {v.get('titulo','')} ({_sj(v.get('sistemas_mencionados',[]))})")
             dores_t = ts.get('dores_tech_identificadas', [])
             if dores_t:
                 st.markdown("**Dores tech:**"); [st.markdown(f"- ⚠️ {x}") for x in dores_t]
@@ -237,7 +243,7 @@ with tab_scout:
                 st.markdown(f"**CNPJ Matriz:** {gr.cnpj_matriz}")
                 if hasattr(gr, 'holding_controladora') and gr.holding_controladora:
                     st.markdown(f"**Holding:** {gr.holding_controladora}")
-                st.markdown(f"**Controladores:** {', '.join(str(c) for c in gr.controladores)}")
+                st.markdown(f"**Controladores:** {_sj(gr.controladores)}")
                 filiais = gr.cnpjs_filiais
                 if filiais:
                     st.markdown(f"**Filiais ({len(filiais)}):**")
