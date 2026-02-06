@@ -1,5 +1,6 @@
 """
 app.py — Senior Scout 360 v3.2
+SAS 4.0 v0.2 - Calibrado para Ticket 500k+
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -13,6 +14,7 @@ from services.cache_service import cache
 from services.request_queue import request_queue
 from utils.market_intelligence import ARGUMENTOS_CONCORRENCIA
 from utils.pdf_export import gerar_pdf
+from utils.sas_scoring_v2 import calcular_sas_v2
 from scout_types import DossieCompleto, Tier, QualityLevel
 
 def _sj(lst, n=None):
@@ -43,7 +45,7 @@ for k in ['dossie','logs','historico','step_results']:
 # === SIDEBAR ===
 with st.sidebar:
     st.title("🕵️ Senior Scout 360")
-    st.caption("v3.2 | All Pro | 9 Agents | Full Agro")
+    st.caption("v3.2 | All Pro | 9 Agents | Full Agro | SAS v0.2")
     st.markdown("---")
     try:
         api_key = st.secrets["GEMINI_API_KEY"]
@@ -111,7 +113,9 @@ with tab_scout:
             st.rerun()
         except Exception as e:
             st.error(f"❌ Erro: {e}")
-            with st.expander("Log"): [st.text(l) for l in st.session_state.logs]
+            with st.expander("Log"): 
+                for l in st.session_state.logs:
+                    st.text(l)
 
     # === RESULTADO ===
     if st.session_state.dossie:
@@ -134,7 +138,7 @@ with tab_scout:
                     f"{lc.get(d.quality_report.nivel.value,'')} {d.quality_report.nivel.value}")
         st.markdown("---")
 
-        # === PERFIL DA EMPRESA (novo - primeiro) ===
+        # === PERFIL DA EMPRESA ===
         st.markdown("### 🏢 Perfil da Empresa")
         cp1, cp2 = st.columns([2, 1])
         with cp1:
@@ -163,17 +167,30 @@ with tab_scout:
                 st.markdown(f"**Local:** {dc.municipio}/{dc.uf}")
         st.markdown("---")
 
-        # === MOVIMENTOS FINANCEIROS (com contexto) ===
+        # === MOVIMENTOS FINANCEIROS ===
         if fi.movimentos_financeiros or fi.fiagros_relacionados:
             st.markdown("### 💰 Movimentos Financeiros & Governanca")
             cm, cf2 = st.columns(2)
             with cm:
-                for m in fi.movimentos_financeiros: st.markdown(f"- 🏦 **{m}**")
+                for m in fi.movimentos_financeiros:
+                    st.markdown(f"- 🏦 **{m}**")
             with cf2:
-                if fi.fiagros_relacionados: st.markdown("**Fiagros:**"); [st.markdown(f"- 📈 {f}") for f in fi.fiagros_relacionados]
-                if fi.cras_emitidos: st.markdown("**CRAs:**"); [st.markdown(f"- 📜 {c}") for c in fi.cras_emitidos]
-                if fi.auditorias: st.markdown("**Auditorias:**"); [st.markdown(f"- ✅ {a}") for a in fi.auditorias]
-                if fi.parceiros_financeiros: st.markdown("**Parceiros:**"); [st.markdown(f"- 🤝 {p}") for p in fi.parceiros_financeiros]
+                if fi.fiagros_relacionados:
+                    st.markdown("**Fiagros:**")
+                    for f in fi.fiagros_relacionados:
+                        st.markdown(f"- 📈 {f}")
+                if fi.cras_emitidos:
+                    st.markdown("**CRAs:**")
+                    for c in fi.cras_emitidos:
+                        st.markdown(f"- 📜 {c}")
+                if fi.auditorias:
+                    st.markdown("**Auditorias:**")
+                    for a in fi.auditorias:
+                        st.markdown(f"- ✅ {a}")
+                if fi.parceiros_financeiros:
+                    st.markdown("**Parceiros:**")
+                    for p in fi.parceiros_financeiros:
+                        st.markdown(f"- 🤝 {p}")
             st.markdown("---")
 
         # === RAIO-X ===
@@ -227,14 +244,18 @@ with tab_scout:
                 outros = ts.get('outros_sistemas', [])
                 if outros:
                     st.markdown("**Outros sistemas:**")
-                    for o in outros: st.markdown(f"- {o.get('tipo','')}: **{o.get('sistema','')}**")
+                    for o in outros:
+                        st.markdown(f"- {o.get('tipo','')}: **{o.get('sistema','')}**")
                 vagas = ts.get('vagas_ti_abertas', [])
                 if vagas:
                     st.markdown("**Vagas TI abertas:**")
-                    for v in vagas: st.markdown(f"- 📋 {v.get('titulo','')} ({_sj(v.get('sistemas_mencionados',[]))})")
-            dores_t = ts.get('dores_tech_identificadas', [])
-            if dores_t:
-                st.markdown("**Dores tech:**"); [st.markdown(f"- ⚠️ {x}") for x in dores_t]
+                    for v in vagas:
+                        st.markdown(f"- 📋 {v.get('titulo','')} ({_sj(v.get('sistemas_mencionados',[]))})")
+                dores_t = ts.get('dores_tech_identificadas', [])
+                if dores_t:
+                    st.markdown("**Dores tech:**")
+                    for x in dores_t:
+                        st.markdown(f"- ⚠️ {x}")
             st.markdown("---")
 
         # === GRUPO ECONOMICO EXPANDIDO ===
@@ -267,7 +288,7 @@ with tab_scout:
         with cch:
             b = d.sas_result.breakdown
             cats = ["Musculo\n(Porte)","Complexidade","Gente\n(Gestao)","Momento\n(Gov/Tech)"]
-            vals = [b.musculo, b.complexidade, b.gente, b.momento]; maxs = [400,250,200,150]
+            vals = [b.musculo, b.complexidade, b.gente, b.momento]; maxs = [350, 250, 220, 180]
             pcts = [v/m*100 for v,m in zip(vals, maxs)]
             fig = go.Figure(go.Scatterpolar(r=pcts+[pcts[0]], theta=cats+[cats[0]], fill='toself',
                 line_color='#1e3a5f', fillcolor='rgba(30,58,95,0.3)'))
@@ -275,13 +296,14 @@ with tab_scout:
                 showlegend=False, height=350, margin=dict(l=60,r=60,t=30,b=30))
             st.plotly_chart(fig, use_container_width=True)
         with ctb:
-            df = pd.DataFrame([{"Pilar":"Musculo","Pts":b.musculo,"Max":400},{"Pilar":"Complexidade","Pts":b.complexidade,"Max":250},
-                {"Pilar":"Gente","Pts":b.gente,"Max":200},{"Pilar":"Momento","Pts":b.momento,"Max":150}])
+            df = pd.DataFrame([{"Pilar":"Musculo","Pts":b.musculo,"Max":350},{"Pilar":"Complexidade","Pts":b.complexidade,"Max":250},
+                {"Pilar":"Gente","Pts":b.gente,"Max":220},{"Pilar":"Momento","Pts":b.momento,"Max":180}])
             st.dataframe(df, hide_index=True, width="stretch")
             st.markdown(f"**Total: {d.sas_result.score}/1000** — {d.sas_result.tier.value}")
         if d.sas_result.justificativas:
             with st.expander("🔍 Justificativas"):
-                for j in d.sas_result.justificativas: st.text(f"→ {j}")
+                for j in d.sas_result.justificativas:
+                    st.text(f"→ {j}")
         st.markdown("---")
 
         # === INTEL ===
@@ -290,28 +312,40 @@ with tab_scout:
             st.markdown("### 📡 Inteligencia de Mercado")
             ti1,ti2,ti3 = st.tabs(["🎯 Sinais","📰 Noticias","⚠️ Riscos"])
             with ti1:
-                for s in il.sinais_compra: st.markdown(f"- 🟢 {s}")
-                if il.dores_identificadas: st.markdown("**Dores:**"); [st.markdown(f"- 🔴 {x}") for x in il.dores_identificadas]
+                for s in il.sinais_compra:
+                    st.markdown(f"- 🟢 {s}")
+                if il.dores_identificadas:
+                    st.markdown("**Dores:**")
+                    for x in il.dores_identificadas:
+                        st.markdown(f"- 🔴 {x}")
             with ti2:
                 for n in il.noticias_recentes:
-                    if isinstance(n, dict): st.markdown(f"**{n.get('titulo','')}** ({n.get('data_aprox','')})\n\n{n.get('resumo','')}")
-                    else: st.markdown(f"- {n}")
+                    if isinstance(n, dict):
+                        st.markdown(f"**{n.get('titulo','')}** ({n.get('data_aprox','')})\n\n{n.get('resumo','')}")
+                    else:
+                        st.markdown(f"- {n}")
             with ti3:
                 cr1,co1 = st.columns(2)
-                with cr1: [st.markdown(f"- ⚠️ {r}") for r in il.riscos]
-                with co1: [st.markdown(f"- 💡 {o}") for o in il.oportunidades]
+                with cr1:
+                    for r in il.riscos:
+                        st.markdown(f"- ⚠️ {r}")
+                with co1:
+                    for o in il.oportunidades:
+                        st.markdown(f"- 💡 {o}")
             st.markdown("---")
 
         # === ANALISE ===
         st.markdown("### 🧠 Inteligencia Estrategica")
         for sec in d.secoes_analise:
-            with st.expander(f"{sec.icone} {sec.titulo}", expanded=True): st.markdown(sec.conteudo)
+            with st.expander(f"{sec.icone} {sec.titulo}", expanded=True):
+                st.markdown(sec.conteudo)
         st.markdown("---")
 
         # === QUALITY ===
         if d.quality_report:
             with st.expander("✅ Quality Gate"):
-                for ch in d.quality_report.checks: st.markdown(f"{'✅' if ch.passou else '❌'} **{ch.criterio}** — {ch.nota}")
+                for ch in d.quality_report.checks:
+                    st.markdown(f"{'✅' if ch.passou else '❌'} **{ch.criterio}** — {ch.nota}")
                 if d.quality_report.audit_ia:
                     ai = d.quality_report.audit_ia
                     st.markdown(f"**Nota IA:** {ai.get('nota_final','N/A')}/10 — {ai.get('nivel','')}")
@@ -332,7 +366,8 @@ with tab_scout:
                 st.download_button("📕 PDF", pf.read(), f"dossie_{nome.replace(' ','_')}.pdf", "application/pdf", use_container_width=True)
             except Exception: st.warning("PDF indisponivel (instale fpdf2)")
         with st.expander("🖥️ Pipeline Log"):
-            for l in st.session_state.logs: st.text(l)
+            for l in st.session_state.logs:
+                st.text(l)
             st.caption(f"Cache: {cache.stats} | Queue: {request_queue.stats}")
 
 # === COMPARADOR ===
@@ -343,9 +378,9 @@ with tab_compare:
         hist = st.session_state.historico[-5:]
         st.dataframe(pd.DataFrame(hist), hide_index=True, width="stretch")
         fig = go.Figure(go.Bar(x=[h['empresa'] for h in hist], y=[h['score'] for h in hist],
-            marker_color=['#1e3a5f' if h['score']>=751 else '#2d5a87' if h['score']>=501 else '#adb5bd' for h in hist],
+            marker_color=['#1e3a5f' if h['score']>=820 else '#2d5a87' if h['score']>=650 else '#adb5bd' for h in hist],
             text=[h['tier'] for h in hist], textposition='auto'))
-        fig.update_layout(title="Score SAS 4.0", yaxis_title="Score", height=400)
+        fig.update_layout(title="Score SAS 4.0 v0.2", yaxis_title="Score", height=400)
         st.plotly_chart(fig, use_container_width=True)
 
 # === ARSENAL ===
@@ -358,8 +393,14 @@ with tab_arsenal:
         if conc:
             info = ARGUMENTOS_CONCORRENCIA[conc]
             c1,c2 = st.columns(2)
-            with c1: st.markdown(f"### ❌ Fraquezas"); [st.markdown(f"- 🔴 {f}") for f in info['fraquezas']]
-            with c2: st.markdown("### ✅ Senior"); [st.markdown(f"- 🟢 {v}") for v in info['senior_vantagem']]
+            with c1:
+                st.markdown(f"### ❌ Fraquezas")
+                for f in info['fraquezas']:
+                    st.markdown(f"- 🔴 {f}")
+            with c2:
+                st.markdown("### ✅ Senior")
+                for v in info['senior_vantagem']:
+                    st.markdown(f"- 🟢 {v}")
     with tab_prof:
         tipo = st.selectbox("Tipo:", ["Grande Grupo (10k+ ha)","Usina","Cooperativa","Pecuaria","HF","Florestal"])
         perfis = {
