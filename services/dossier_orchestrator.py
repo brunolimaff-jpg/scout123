@@ -5,6 +5,13 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import json, time
 from typing import Optional, Callable
+
+
+def _sj(lst, n=None):
+    """Safe join: converts any list items to str before joining."""
+    if not lst: return ''
+    items = lst[:n] if n else lst
+    return ', '.join(str(x) if not isinstance(x, dict) else x.get('nome', x.get('titulo', x.get('sistema', str(x)))) for x in items)
 from google import genai
 from scout_types import (
     DossieCompleto, DadosOperacionais, DadosFinanceiros, CadeiaValor,
@@ -33,10 +40,11 @@ def _parse_vert(raw):
 def _parse_ops(raw):
     return DadosOperacionais(
         nome_grupo=raw.get('nome_grupo',''), hectares_total=int(raw.get('hectares_total',0) or 0),
-        culturas=raw.get('culturas',[]) or [], verticalizacao=_parse_vert(raw),
-        regioes_atuacao=raw.get('regioes_atuacao',[]) or [],
+        culturas=_to_strlist(raw.get('culturas',[])),
+        verticalizacao=_parse_vert(raw),
+        regioes_atuacao=_to_strlist(raw.get('regioes_atuacao',[])),
         numero_fazendas=int(raw.get('numero_fazendas',0) or 0),
-        tecnologias_identificadas=raw.get('tecnologias_identificadas',[]) or [],
+        tecnologias_identificadas=_to_strlist(raw.get('tecnologias_identificadas',[])),
         cabecas_gado=int(raw.get('cabecas_gado',0) or 0),
         cabecas_aves=int(raw.get('cabecas_aves',0) or 0),
         cabecas_suinos=int(raw.get('cabecas_suinos',0) or 0),
@@ -44,16 +52,21 @@ def _parse_ops(raw):
         area_irrigada_ha=int(raw.get('area_irrigada_ha',0) or 0),
         confianca=float(raw.get('confianca',0) or 0))
 
+def _to_strlist(v):
+    """Force any list to list[str], handling dicts gracefully."""
+    if not v: return []
+    return [str(x) if not isinstance(x, dict) else x.get('nome', x.get('titulo', x.get('descricao', json.dumps(x, ensure_ascii=False)))) for x in v]
+
 def _parse_fin(raw):
     return DadosFinanceiros(
         capital_social_estimado=float(raw.get('capital_social_estimado',0) or 0),
         funcionarios_estimados=int(raw.get('funcionarios_estimados',0) or 0),
         faturamento_estimado=float(raw.get('faturamento_estimado',0) or 0),
-        movimentos_financeiros=raw.get('movimentos_financeiros',[]) or [],
-        fiagros_relacionados=raw.get('fiagros_relacionados',[]) or [],
-        cras_emitidos=raw.get('cras_emitidos',[]) or [],
-        parceiros_financeiros=raw.get('parceiros_financeiros',[]) or [],
-        auditorias=raw.get('auditorias',[]) or [],
+        movimentos_financeiros=_to_strlist(raw.get('movimentos_financeiros',[])),
+        fiagros_relacionados=_to_strlist(raw.get('fiagros_relacionados',[])),
+        cras_emitidos=_to_strlist(raw.get('cras_emitidos',[])),
+        parceiros_financeiros=_to_strlist(raw.get('parceiros_financeiros',[])),
+        auditorias=_to_strlist(raw.get('auditorias',[])),
         governanca_corporativa=bool(raw.get('governanca_corporativa',False)),
         resumo_financeiro=raw.get('resumo_financeiro',''),
         confianca=float(raw.get('confianca',0) or 0))
@@ -61,14 +74,14 @@ def _parse_fin(raw):
 def _parse_cadeia(raw):
     return CadeiaValor(
         posicao_cadeia=raw.get('posicao_cadeia',''),
-        clientes_principais=raw.get('clientes_principais',[]) or [],
-        fornecedores_principais=raw.get('fornecedores_principais',[]) or [],
-        parcerias_estrategicas=raw.get('parcerias_estrategicas',[]) or [],
-        canais_venda=raw.get('canais_venda',[]) or [],
+        clientes_principais=_to_strlist(raw.get('clientes_principais',[])),
+        fornecedores_principais=_to_strlist(raw.get('fornecedores_principais',[])),
+        parcerias_estrategicas=_to_strlist(raw.get('parcerias_estrategicas',[])),
+        canais_venda=_to_strlist(raw.get('canais_venda',[])),
         integracao_vertical_nivel=raw.get('integracao_vertical_nivel',''),
         exporta=bool(raw.get('exporta',False)),
-        mercados_exportacao=raw.get('mercados_exportacao',[]) or [],
-        certificacoes=raw.get('certificacoes',[]) or [],
+        mercados_exportacao=_to_strlist(raw.get('mercados_exportacao',[])),
+        certificacoes=_to_strlist(raw.get('certificacoes',[])),
         confianca=float(raw.get('confianca',0) or 0))
 
 def _parse_grupo(raw):
@@ -95,12 +108,12 @@ def _parse_grupo(raw):
 def _parse_intel(raw):
     return IntelMercado(
         noticias_recentes=raw.get('noticias_recentes',[]) or [],
-        concorrentes=raw.get('concorrentes',[]) or [],
-        tendencias_setor=raw.get('tendencias_setor',[]) or [],
-        dores_identificadas=raw.get('dores_identificadas',[]) or [],
-        oportunidades=raw.get('oportunidades',[]) or [],
-        sinais_compra=raw.get('sinais_compra',[]) or [],
-        riscos=raw.get('riscos',[]) or [],
+        concorrentes=_to_strlist(raw.get('concorrentes',[])),
+        tendencias_setor=_to_strlist(raw.get('tendencias_setor',[])),
+        dores_identificadas=_to_strlist(raw.get('dores_identificadas',[])),
+        oportunidades=_to_strlist(raw.get('oportunidades',[])),
+        sinais_compra=_to_strlist(raw.get('sinais_compra',[])),
+        riscos=_to_strlist(raw.get('riscos',[])),
         confianca=float(raw.get('confianca',0) or 0))
 
 def _parse_secoes(texto):
@@ -158,9 +171,9 @@ def gerar_dossie_completo(empresa_alvo, api_key, cnpj="", log_cb=None, progress_
     ng = d.dados_operacionais.nome_grupo or empresa_alvo
     verts = d.dados_operacionais.verticalizacao.listar_ativos()
     s2.status = "success"; s2.confianca = d.dados_operacionais.confianca
-    s2.resumo = f"{ng} | {d.dados_operacionais.hectares_total:,} ha | {', '.join(d.dados_operacionais.culturas[:4])}"
-    s2.detalhes = [f"Fazendas: {d.dados_operacionais.numero_fazendas}", f"Regioes: {', '.join(d.dados_operacionais.regioes_atuacao)}"]
-    if verts: s2.detalhes.append(f"Vert: {', '.join(verts[:6])}")
+    s2.resumo = f"{ng} | {d.dados_operacionais.hectares_total:,} ha | {_sj(d.dados_operacionais.culturas, 4)}"
+    s2.detalhes = [f"Fazendas: {d.dados_operacionais.numero_fazendas}", f"Regioes: {_sj(d.dados_operacionais.regioes_atuacao)}"]
+    if verts: s2.detalhes.append(f"Vert: {_sj(verts, 6)}")
     if d.dados_operacionais.cabecas_gado: s2.detalhes.append(f"Gado: {d.dados_operacionais.cabecas_gado:,}")
     s2.tempo_segundos = time.time() - t0; _step(s2)
 
@@ -173,8 +186,8 @@ def gerar_dossie_completo(empresa_alvo, api_key, cnpj="", log_cb=None, progress_
     fi = d.dados_financeiros
     s3.status = "success"; s3.confianca = fi.confianca
     s3.resumo = f"R${fi.capital_social_estimado/1e6:.1f}M | {fi.funcionarios_estimados:,} funcs | {len(fi.movimentos_financeiros)} mov"
-    s3.detalhes = [f"Fiagros: {', '.join(fi.fiagros_relacionados[:2]) or 'Nenhum'}",
-                   f"CRAs: {', '.join(fi.cras_emitidos[:2]) or 'Nenhum'}"]
+    s3.detalhes = [f"Fiagros: {_sj(fi.fiagros_relacionados, 2) or 'Nenhum'}",
+                   f"CRAs: {_sj(fi.cras_emitidos, 2) or 'Nenhum'}"]
     for mv in fi.movimentos_financeiros[:2]: s3.detalhes.append(f"→ {mv[:80]}")
     s3.tempo_segundos = time.time() - t0; _step(s3)
 
@@ -187,8 +200,8 @@ def gerar_dossie_completo(empresa_alvo, api_key, cnpj="", log_cb=None, progress_
     cv = d.cadeia_valor
     s4.status = "success"; s4.confianca = cv.confianca
     s4.resumo = f"{cv.posicao_cadeia} | {cv.integracao_vertical_nivel} | Export: {'Sim' if cv.exporta else 'Nao'}"
-    s4.detalhes = [f"Clientes: {', '.join(cv.clientes_principais[:3]) or 'N/I'}",
-                   f"Certif: {', '.join(cv.certificacoes) or 'Nenhuma'}"]
+    s4.detalhes = [f"Clientes: {_sj(cv.clientes_principais, 3) or 'N/I'}",
+                   f"Certif: {_sj(cv.certificacoes) or 'Nenhuma'}"]
     s4.tempo_segundos = time.time() - t0; _step(s4)
 
     # P5: GRUPO ECONOMICO
@@ -201,7 +214,7 @@ def gerar_dossie_completo(empresa_alvo, api_key, cnpj="", log_cb=None, progress_
     s5.status = "success"; s5.confianca = g.confianca
     nfil = len(g.cnpjs_filiais); ncol = len(g.cnpjs_coligadas)
     s5.resumo = f"{g.total_empresas} empresas | {nfil} filiais | {ncol} coligadas"
-    s5.detalhes = [f"Controladores: {', '.join(str(c) for c in g.controladores[:3]) or 'N/I'}"]
+    s5.detalhes = [f"Controladores: {_sj(g.controladores, 3) or 'N/I'}"]
     if g.holding_controladora: s5.detalhes.append(f"Holding: {g.holding_controladora}")
     s5.tempo_segundos = time.time() - t0; _step(s5)
 
@@ -244,7 +257,7 @@ def gerar_dossie_completo(empresa_alvo, api_key, cnpj="", log_cb=None, progress_
     for ot in raw_tech.get('outros_sistemas', [])[:3]:
         s8.detalhes.append(f"→ {ot.get('tipo','')}: {ot.get('sistema','')}")
     for vg in raw_tech.get('vagas_ti_abertas', [])[:2]:
-        s8.detalhes.append(f"📋 Vaga: {vg.get('titulo','')} ({', '.join(vg.get('sistemas_mencionados',[])[:2])})")
+        s8.detalhes.append(f"📋 Vaga: {vg.get('titulo','')} ({_sj(vg.get('sistemas_mencionados',[]), 2)})")
     s8.tempo_segundos = time.time() - t0; _step(s8)
 
     # P8.5: SCORE SAS
