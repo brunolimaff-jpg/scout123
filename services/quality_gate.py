@@ -1,58 +1,138 @@
-“””
-services/quality_gate.py — Auditor de Qualidade Determinístico
-“””
+"""
+services/quality_gate.py — Auditor de Qualidade
+Equivalente ao qualityGateService.ts.
+Executa verificações determinísticas + IA sobre o dossiê gerado.
+"""
 import time
-from scout_types import QualityReport, QualityCheck, QualityLevel, DossieCompleto
+from scout_types import (
+    QualityReport, QualityCheck, QualityLevel, DossieCompleto,
+)
 
-def executar_quality_gate(d: DossieCompleto) -> QualityReport:
-checks = []
 
-```
-# 1. Cadastrais
-t = sum([d.dados_cnpj is not None, bool(d.dados_cnpj and d.dados_cnpj.razao_social),
-         bool(d.dados_cnpj and d.dados_cnpj.cnae_principal)])
-checks.append(QualityCheck("Dados Cadastrais (CNPJ)", t >= 2, f"{t}/3", 1.0))
+def _check_dados_cadastrais(dossie: DossieCompleto) -> QualityCheck:
+    """Verifica se dados cadastrais básicos existem."""
+    tem_cnpj = dossie.dados_cnpj is not None
+    tem_razao = bool(dossie.dados_cnpj and dossie.dados_cnpj.razao_social)
+    tem_cnae = bool(dossie.dados_cnpj and dossie.dados_cnpj.cnae_principal)
+    
+    total = sum([tem_cnpj, tem_razao, tem_cnae])
+    passou = total >= 2
+    
+    return QualityCheck(
+        criterio="Dados Cadastrais (CNPJ, Razão Social, CNAE)",
+        passou=passou,
+        nota=f"{total}/3 campos preenchidos",
+        peso=1.0,
+    )
 
-# 2. Operacionais
-o = d.dados_operacionais
-t = sum([o.hectares_total > 0, len(o.culturas) > 0, len(o.regioes_atuacao) > 0, o.confianca >= 0.5])
-checks.append(QualityCheck("Dados Operacionais", t >= 2, f"{t}/4 | Conf: {o.confianca:.0%}", 1.5))
 
-# 3. Financeiros
-f = d.dados_financeiros
-t = sum([f.capital_social_estimado > 0, f.funcionarios_estimados > 0,
-         len(f.movimentos_financeiros) > 0, f.governanca_corporativa or len(f.auditorias) > 0])
-checks.append(QualityCheck("Dados Financeiros", t >= 2, f"{t}/4 | {len(f.movimentos_financeiros)} movimentos", 1.5))
+def _check_dados_operacionais(dossie: DossieCompleto) -> QualityCheck:
+    """Verifica se dados operacionais foram coletados."""
+    ops = dossie.dados_operacionais
+    tem_hectares = ops.hectares_total > 0
+    tem_culturas = len(ops.culturas) > 0
+    tem_regioes = len(ops.regioes_atuacao) > 0
+    confianca_ok = ops.confianca >= 0.5
+    
+    total = sum([tem_hectares, tem_culturas, tem_regioes, confianca_ok])
+    passou = total >= 2
+    
+    return QualityCheck(
+        criterio="Dados Operacionais (Hectares, Culturas, Regiões)",
+        passou=passou,
+        nota=f"{total}/4 indicadores OK | Confiança: {ops.confianca:.0%}",
+        peso=1.5,
+    )
 
-# 4. Cadeia de valor
-cv = d.cadeia_valor
-t = sum([bool(cv.posicao_cadeia), len(cv.clientes_principais) > 0,
-         bool(cv.integracao_vertical_nivel), cv.confianca >= 0.4])
-checks.append(QualityCheck("Cadeia de Valor", t >= 2, f"{t}/4 | Conf: {cv.confianca:.0%}", 1.0))
 
-# 5. Grupo econômico
-g = d.grupo_economico
-checks.append(QualityCheck("Grupo Econômico", g.total_empresas > 0,
-                            f"{g.total_empresas} empresas | {len(g.controladores)} controladores", 0.8))
+def _check_dados_financeiros(dossie: DossieCompleto) -> QualityCheck:
+    """Verifica se dados financeiros foram coletados."""
+    fin = dossie.dados_financeiros
+    tem_capital = fin.capital_social_estimado > 0
+    tem_funcs = fin.funcionarios_estimados > 0
+    tem_movimentos = len(fin.movimentos_financeiros) > 0
+    tem_governanca = fin.governanca_corporativa or len(fin.auditorias) > 0
+    
+    total = sum([tem_capital, tem_funcs, tem_movimentos, tem_governanca])
+    passou = total >= 2
+    
+    return QualityCheck(
+        criterio="Dados Financeiros (Capital, Funcionários, Movimentos)",
+        passou=passou,
+        nota=f"{total}/4 indicadores | {len(fin.movimentos_financeiros)} movimentos detectados",
+        peso=1.5,
+    )
 
-# 6. Análise
-sec = d.secoes_analise
-nw = sum(len(s.conteudo.split()) for s in sec)
-checks.append(QualityCheck("Análise Estratégica", len(sec) >= 3 and nw >= 500,
-                            f"{len(sec)} seções | {nw} palavras", 2.0))
 
-# 7. Score
-checks.append(QualityCheck("Score SAS 4.0", d.sas_result.score > 0,
-                            f"{d.sas_result.score}/1000 ({d.sas_result.tier.value})", 1.0))
+def _check_analise_gerada(dossie: DossieCompleto) -> QualityCheck:
+    """Verifica se a análise estratégica foi gerada adequadamente."""
+    secoes = dossie.secoes_analise
+    tem_secoes = len(secoes) >= 3
+    
+    total_palavras = sum(len(s.conteudo.split()) for s in secoes)
+    palavras_ok = total_palavras >= 400
+    
+    passou = tem_secoes and palavras_ok
+    
+    return QualityCheck(
+        criterio="Análise Estratégica (4 seções, profundidade)",
+        passou=passou,
+        nota=f"{len(secoes)} seções | {total_palavras} palavras total",
+        peso=2.0,
+    )
 
-tp = sum(c.peso for c in checks)
-sp = sum(c.peso * (1.0 if c.passou else 0.0) for c in checks) / tp * 100
 
-nivel = (QualityLevel.EXCELENTE if sp >= 85 else QualityLevel.BOM if sp >= 65
-         else QualityLevel.ACEITAVEL if sp >= 45 else QualityLevel.INSUFICIENTE)
+def _check_score_calculado(dossie: DossieCompleto) -> QualityCheck:
+    """Verifica se o score foi calculado."""
+    tem_score = dossie.sas_result.score > 0
+    tem_breakdown = dossie.sas_result.breakdown.total > 0
+    
+    return QualityCheck(
+        criterio="Score SAS 4.0 Calculado",
+        passou=tem_score and tem_breakdown,
+        nota=f"Score: {dossie.sas_result.score}/1000 ({dossie.sas_result.tier.value})",
+        peso=1.0,
+    )
 
-recs = [f"⚠️ {c.criterio}: {c.nota}" for c in checks if not c.passou]
 
-return QualityReport(nivel=nivel, score_qualidade=sp, checks=checks,
-                      recomendacoes=recs, timestamp=str(time.time()))
-```
+def executar_quality_gate(dossie: DossieCompleto) -> QualityReport:
+    """
+    Executa todas as verificações de qualidade (determinísticas).
+    O audit pela IA é feito separadamente via agent_auditor_qualidade.
+    """
+    checks = [
+        _check_dados_cadastrais(dossie),
+        _check_dados_operacionais(dossie),
+        _check_dados_financeiros(dossie),
+        _check_analise_gerada(dossie),
+        _check_score_calculado(dossie),
+    ]
+    
+    # Calcular score ponderado
+    total_peso = sum(c.peso for c in checks)
+    score_ponderado = sum(c.peso * (1.0 if c.passou else 0.0) for c in checks) / total_peso
+    score_percentual = score_ponderado * 100
+    
+    # Determinar nível
+    if score_percentual >= 85:
+        nivel = QualityLevel.EXCELENTE
+    elif score_percentual >= 65:
+        nivel = QualityLevel.BOM
+    elif score_percentual >= 45:
+        nivel = QualityLevel.ACEITAVEL
+    else:
+        nivel = QualityLevel.INSUFICIENTE
+    
+    # Gerar recomendações
+    recomendacoes = []
+    for check in checks:
+        if not check.passou:
+            recomendacoes.append(f"⚠️ {check.criterio}: {check.nota}")
+    
+    return QualityReport(
+        nivel=nivel,
+        score_qualidade=score_percentual,
+        checks=checks,
+        recomendacoes=recomendacoes,
+        timestamp=str(time.time()),
+    )
