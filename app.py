@@ -237,7 +237,7 @@ with tab_scout:
                 st.markdown(f"**CNPJ Matriz:** {gr.cnpj_matriz}")
                 if hasattr(gr, 'holding_controladora') and gr.holding_controladora:
                     st.markdown(f"**Holding:** {gr.holding_controladora}")
-                st.markdown(f"**Controladores:** {', '.join(gr.controladores)}")
+                st.markdown(f"**Controladores:** {', '.join(str(c) for c in gr.controladores)}")
                 filiais = gr.cnpjs_filiais
                 if filiais:
                     st.markdown(f"**Filiais ({len(filiais)}):**")
