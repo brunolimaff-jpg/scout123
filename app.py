@@ -14,7 +14,7 @@ from utils.market_intelligence import ARGUMENTOS_CONCORRENCIA, get_contexto_cnae
 from utils.pdf_export import gerar_pdf
 from scout_types import DossieCompleto, Tier, QualityLevel
 
-st.set_page_config(page_title=“Senior Scout 360 v3.1”, page_icon=“🕵️”, layout=“wide”, initial_sidebar_state=“expanded”)
+st.set_page_config(page_title=Senior Scout 360 v3.1, page_icon=“🕵️”, layout=“wide”, initial_sidebar_state=“expanded”)
 
 FRASES = [
 “🛰️ Ativando satélites de reconhecimento…”, “📡 Conectando 7 agentes Pro…”,
