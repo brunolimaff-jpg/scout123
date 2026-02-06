@@ -1,447 +1,405 @@
 """
-services/gemini_service.py — Motor Híbrido de IA
-Equivalente ao geminiService.ts.
-Centraliza toda comunicação com Gemini API.
-Usa modelo certo para cada tarefa:
-  - Flash: busca rápida com Google Search
-  - Pro: raciocínio profundo, análise estratégica, auditoria
+services/gemini_service.py — Motor IA v3.1 (ALL Pro, 7 Agents)
+TODOS os agentes rodam no gemini-2.5-pro para máxima precisão.
 """
-import json
-import re
-import time
+import json, re, time
 from typing import Optional, Any
 from google import genai
 from google.genai import types
-
 from services.cache_service import cache
 from services.request_queue import request_queue, Priority
 
+MODEL = "gemini-2.5-pro"  # TUDO no Pro — precisão máxima
 
-# =============================================================================
-# CONSTANTES
-# =============================================================================
+SEARCH_TOOL = types.Tool(google_search=types.GoogleSearch())
 
-MODEL_FLASH = "gemini-2.5-flash"
-MODEL_PRO = "gemini-2.5-pro"
-MODEL_FLASH_LITE = "gemini-2.5-flash-lite"
-
-
-# =============================================================================
-# HELPERS
-# =============================================================================
 
 def _clean_json(text: str) -> Optional[dict]:
-    """Extrai e parseia JSON de resposta do Gemini."""
-    if not text:
-        return None
-    
-    # Tenta extrair bloco JSON
-    try:
-        match = re.search(r'\{.*\}', text, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-    except (json.JSONDecodeError, AttributeError):
-        pass
-    
-    # Tenta limpar markdown
-    try:
-        clean = text.replace('```json', '').replace('```', '').strip()
-        return json.loads(clean)
-    except (json.JSONDecodeError, ValueError):
-        pass
-    
-    return None
-
-
-def _clean_json_array(text: str) -> Optional[list]:
-    """Extrai e parseia JSON array de resposta do Gemini."""
     if not text:
         return None
     try:
-        match = re.search(r'\[.*\]', text, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-    except (json.JSONDecodeError, AttributeError):
+        m = re.search(r'\{.*\}', text, re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+    except Exception:
         pass
-    return None
-
-
-def _safe_call(client, model: str, contents: str, config: types.GenerateContentConfig,
-               priority: Priority = Priority.NORMAL) -> Optional[str]:
-    """Wrapper seguro para chamada ao Gemini com rate limiting."""
-    def _do_call():
-        resp = client.models.generate_content(
-            model=model,
-            contents=contents,
-            config=config,
-        )
-        return resp.text
-    
     try:
-        return request_queue.execute(_do_call, priority=priority)
-    except Exception as e:
+        return json.loads(text.replace('```json', '').replace('```', '').strip())
+    except Exception:
+        return None
+
+
+def _call(client, prompt: str, config: types.GenerateContentConfig, prio: Priority = Priority.NORMAL) -> Optional[str]:
+    def _do():
+        return client.models.generate_content(model=MODEL, contents=prompt, config=config).text
+    try:
+        return request_queue.execute(_do, priority=prio)
+    except Exception:
         return None
 
 
 # =============================================================================
-# AGENTE 1: RECON OPERACIONAL (Flash + Search)
+# AGENTE 1: RECON OPERACIONAL
 # =============================================================================
-
 def agent_recon_operacional(client, empresa: str) -> dict:
-    """
-    Agente de Reconhecimento Operacional.
-    Usa Flash + Google Search para mapear a estrutura física.
-    """
-    cache_key = {"agent": "recon", "empresa": empresa}
-    cached = cache.get("agent_recon", cache_key)
-    if cached:
-        return cached
-    
-    prompt = f"""ATUE COMO: Investigador Agrícola Sênior com 20 anos de experiência.
+    ck = {"a": "recon", "e": empresa}
+    c = cache.get("recon", ck)
+    if c:
+        return c
+
+    prompt = f"""ATUE COMO: Investigador Agrícola Sênior com 20 anos de campo.
 ALVO: "{empresa}"
 
-Você deve descobrir a ESTRUTURA FÍSICA E OPERACIONAL do grupo econômico.
-Busque em múltiplas fontes (site oficial, LinkedIn, notícias, Econodata, etc).
+Busque em MÚLTIPLAS fontes (site oficial, LinkedIn, notícias, Econodata, relatórios setoriais).
 
-INVESTIGUE:
-1. Nome oficial do grupo econômico (pode ser diferente do nome fantasia)
-2. Área TOTAL em hectares — se encontrar números diferentes, pegue o MAIS RECENTE
-3. TODAS as culturas cultivadas (soja, milho, algodão, cana, café, HF, pecuária, etc)
-4. Infraestrutura vertical: tem agroindústria? Silos? Sementeira? Algodoeira? Usina? Frigorífico?
-5. Regiões onde opera (estados, municípios, biomas)
-6. Número aproximado de fazendas/unidades
-7. Tecnologias que usa (agricultura de precisão, drones, ERP, etc)
+DESCUBRA COM PRECISÃO:
+1. Nome oficial do grupo econômico
+2. Área TOTAL em hectares (se faixa, use valor médio)
+3. TODAS as culturas: grãos, fibras, cana, café, citrus, HF, florestal, pecuária, etc
+4. TODA infraestrutura vertical existente (veja a lista completa abaixo)
+5. Regiões/estados de atuação
+6. Número de fazendas/unidades
+7. Pecuária: cabeças de gado, aves, suínos (se aplicável)
+8. Área irrigada e área florestal (se aplicável)
+9. Tecnologias: agricultura de precisão, drones, ERP, telemetria, etc.
 
-REGRAS:
-- Seja FACTUAL. Não invente dados. Se não encontrar, diga 0.
-- Se encontrar faixa (ex: "20 a 30 mil hectares"), use o valor MÉDIO.
-- Atribua confiança de 0.0 a 1.0 aos dados encontrados.
+LISTA COMPLETA DE VERTICALIZAÇÃO (marque true/false para CADA):
+silos, armazens_gerais, terminal_portuario, ferrovia_propria, frota_propria,
+algodoeira, sementeira, ubs, secador,
+agroindustria, usina_acucar_etanol, destilaria, esmagadora_soja, refinaria_oleo,
+fabrica_biodiesel, torrefacao_cafe, beneficiamento_arroz, fabrica_sucos, vinicultura,
+frigorifico_bovino, frigorifico_aves, frigorifico_suinos, frigorifico_peixes,
+laticinio, fabrica_racao, incubatorio,
+fabrica_fertilizantes, fabrica_defensivos, laboratorio_genetica, central_inseminacao, viveiro_mudas,
+cogeracao_energia, usina_solar, biodigestor, planta_biogas, creditos_carbono,
+florestal_eucalipto, florestal_pinus, fabrica_celulose, serraria,
+pivos_centrais, irrigacao_gotejamento, barragem_propria,
+agricultura_precisao, drones_proprios, estacoes_meteorologicas, telemetria_frota, erp_implantado
 
-Retorne APENAS JSON válido:
-{{
-    "nome_grupo": "Nome Real do Grupo",
-    "hectares_total": numero,
-    "culturas": ["lista", "de", "culturas"],
-    "verticalizacao": {{
-        "agroindustria": bool,
-        "sementeira": bool,
-        "silos": bool,
-        "algodoeira": bool,
-        "usina": bool,
-        "frigorifico": bool,
-        "fabrica_racao": bool
-    }},
-    "regioes_atuacao": ["MT", "GO"],
-    "numero_fazendas": numero,
-    "tecnologias_identificadas": ["lista"],
-    "confianca": 0.8
-}}"""
-
-    config = types.GenerateContentConfig(
-        tools=[types.Tool(google_search=types.GoogleSearch())],
-        temperature=0.1,
-        # Para modelos com thinking, budget de tokens para raciocínio
-        thinking_config=types.ThinkingConfig(thinking_budget=2048),
-    )
-    
-    text = _safe_call(client, MODEL_FLASH, prompt, config, Priority.HIGH)
-    result = _clean_json(text) or {
-        "nome_grupo": empresa,
-        "hectares_total": 0,
-        "confianca": 0.0,
-    }
-    
-    cache.set("agent_recon", cache_key, result, ttl=7200)
-    return result
-
-
-# =============================================================================
-# AGENTE 2: SNIPER FINANCEIRO (Flash + Search)
-# =============================================================================
-
-def agent_sniper_financeiro(client, empresa: str, nome_grupo: str = "") -> dict:
-    """
-    Agente Sniper Financeiro.
-    Deep dive em movimentações financeiras, Fiagro, CRA, governança.
-    """
-    alvo = nome_grupo or empresa
-    cache_key = {"agent": "financeiro", "empresa": alvo}
-    cached = cache.get("agent_fin", cache_key)
-    if cached:
-        return cached
-    
-    prompt = f"""ATUE COMO: Analista Sênior de Mercado de Capitais especializado em Agro.
-ALVO: "{alvo}" (também pesquise como "{empresa}" se for diferente)
-
-Você é um detective financeiro. Vasculhe a web procurando ESPECIFICAMENTE:
-
-1. EMISSÕES DE CRA (Certificados de Recebíveis do Agronegócio):
-   - Valor, data, estruturador (Itaú BBA, BTG, XP, etc)
-   - Séries, ratings
-
-2. FIAGRO (Fundos de Investimento das Cadeias Produtivas Agroindustriais):
-   - Fundos que investiram neles ou que eles criaram
-   - Gestoras (Suno, XP, Valora, Capitânia, etc)
-   - Ticker (ex: SNFZ11, VGIA11)
-
-3. GOVERNANÇA CORPORATIVA:
-   - Auditoria externa (Big 4: Deloitte, PwC, EY, KPMG)
-   - Conselho de administração
-   - Natureza jurídica (S.A. vs Ltda)
-   
-4. M&A (Fusões e Aquisições):
-   - Compraram ou foram comprados?
-   - Parcerias estratégicas
-
-5. DADOS FINANCEIROS:
-   - Capital social (Econodata, Casa dos Dados, Sócios Brasil)
-   - Faturamento estimado
-   - Número de funcionários (LinkedIn, RAIS)
-   
-6. PARCEIROS FINANCEIROS:
-   - Bancos, gestoras, seguradoras com relacionamento
-
-Retorne APENAS JSON válido:
-{{
-    "capital_social_estimado": numero,
-    "funcionarios_estimados": numero,
-    "faturamento_estimado": numero,
-    "movimentos_financeiros": ["Fato 1: Emissão de CRA de R$50M via Itaú BBA em 2023", "Fato 2: ..."],
-    "fiagros_relacionados": ["SNFZ11 (Suno)", "..."],
-    "cras_emitidos": ["CRA Série X - R$YM - Estruturador Z"],
-    "parceiros_financeiros": ["Itaú BBA", "XP", "..."],
-    "auditorias": ["Deloitte", "..."],
-    "governanca_corporativa": bool,
-    "resumo_financeiro": "Texto curto sobre a robustez financeira do grupo.",
-    "confianca": 0.7
-}}"""
-
-    config = types.GenerateContentConfig(
-        tools=[types.Tool(google_search=types.GoogleSearch())],
-        temperature=0.1,
-        thinking_config=types.ThinkingConfig(thinking_budget=2048),
-    )
-    
-    text = _safe_call(client, MODEL_FLASH, prompt, config, Priority.HIGH)
-    result = _clean_json(text) or {"confianca": 0.0}
-    
-    cache.set("agent_fin", cache_key, result, ttl=7200)
-    return result
-
-
-# =============================================================================
-# AGENTE 3: INTEL DE MERCADO (Flash + Search)
-# =============================================================================
-
-def agent_intel_mercado(client, empresa: str, setor_info: str = "") -> dict:
-    """
-    Agente de Inteligência de Mercado.
-    Busca notícias recentes, sinais de compra, riscos e oportunidades.
-    """
-    cache_key = {"agent": "intel", "empresa": empresa}
-    cached = cache.get("agent_intel", cache_key)
-    if cached:
-        return cached
-    
-    prompt = f"""ATUE COMO: Analista de Inteligência Competitiva focado em Agronegócio.
-ALVO: "{empresa}"
-{f'CONTEXTO DO SETOR: {setor_info}' if setor_info else ''}
-
-Busque as NOTÍCIAS E SINAIS mais recentes (últimos 12 meses) sobre esta empresa.
-
-INVESTIGUE:
-1. NOTÍCIAS RECENTES: Expansão? Crise? Investimento? Novo projeto?
-2. SINAIS DE COMPRA para ERP/tecnologia:
-   - Expansão de área ou de operações
-   - Contratação de C-level (CFO, CTO, CIO)
-   - Problemas operacionais reportados
-   - Auditoria ou IPO (precisam de sistemas)
-3. RISCOS: Processos judiciais, problemas ambientais, inadimplência
-4. CONCORRENTES: Quem mais atua no mesmo segmento/região?
-5. OPORTUNIDADES: Janelas de venda, dores explícitas
-
-Retorne APENAS JSON válido:
-{{
-    "noticias_recentes": [
-        {{"titulo": "...", "resumo": "...", "data_aprox": "2024-XX", "relevancia": "alta/media/baixa"}},
-    ],
-    "sinais_compra": ["Sinal 1: ...", "Sinal 2: ..."],
-    "riscos": ["Risco 1: ...", "Risco 2: ..."],
-    "oportunidades": ["Oportunidade 1: ...", "Oportunidade 2: ..."],
-    "concorrentes": ["Empresa X", "Empresa Y"],
-    "dores_identificadas": ["Dor 1: ...", "Dor 2: ..."],
-    "confianca": 0.7
-}}"""
-
-    config = types.GenerateContentConfig(
-        tools=[types.Tool(google_search=types.GoogleSearch())],
-        temperature=0.2,
-        thinking_config=types.ThinkingConfig(thinking_budget=1024),
-    )
-    
-    text = _safe_call(client, MODEL_FLASH, prompt, config, Priority.NORMAL)
-    result = _clean_json(text) or {"confianca": 0.0}
-    
-    cache.set("agent_intel", cache_key, result, ttl=3600)
-    return result
-
-
-# =============================================================================
-# AGENTE 4: ANÁLISE ESTRATÉGICA (Pro — Raciocínio Profundo)
-# =============================================================================
-
-def agent_analise_estrategica(client, dados_completos: dict, sas_result: dict,
-                               contexto_mercado: str = "") -> str:
-    """
-    Agente Analista Estratégico.
-    Usa Gemini Pro para análise profunda e redação do dossiê.
-    """
-    prompt = f"""VOCÊ É: Sara, Analista Sênior de Inteligência de Vendas para o Agronegócio.
-Você trabalha na Senior Sistemas e prepara briefings estratégicos ("off-the-record") 
-para Executivos de Contas que vão prospectar grandes operações agrícolas.
-
-DADOS COLETADOS SOBRE O ALVO:
-{json.dumps(dados_completos, indent=2, ensure_ascii=False, default=str)}
-
-SCORE SAS 4.0: {sas_result.get('score', 0)}/1000 — Classificação: {sas_result.get('tier', 'N/D')}
-BREAKDOWN: {json.dumps(sas_result.get('breakdown', {}), ensure_ascii=False)}
-
-{contexto_mercado}
-
-=== ESTRUTURA OBRIGATÓRIA DO BRIEFING ===
-
-Escreva 4 seções, separadas EXATAMENTE por '|||':
-
-SEÇÃO 1 — PERFIL E MERCADO:
-- Quem é esse grupo? Qual o tamanho REAL da operação?
-- Se emitiu CRA ou tem Fiagro, isso indica que é uma CORPORAÇÃO, não "fazendeiro"
-- Contexto regional: o que está acontecendo na região deles?
-- Se tem S.A. ou auditoria: trate como empresa com governança
-
-SEÇÃO 2 — COMPLEXIDADE OPERACIONAL E DORES:
-- Mapeie a complexidade: múltiplas culturas? Verticalização? Multisite?
-- Quais as dores ESPECÍFICAS deste tipo de operação?
-- Onde eles provavelmente têm gaps de gestão?
-- NUNCA use dores genéricas — conecte com os dados reais
-
-SEÇÃO 3 — FIT SENIOR (O PITCH):
-- Quais módulos Senior resolvem as dores identificadas?
-- Qual o argumento matador para esta conta específica?
-- Se usa concorrente (TOTVS, SAP, Siagri), qual o argumento de troca?
-- ROI estimado: onde Senior gera economia?
-
-SEÇÃO 4 — PLANO DE ATAQUE:
-- Quem é o decisor provável? (CFO? CEO? Dir. Operações?)
-- Qual o timing ideal? (Safra? Entressafra? Pós-CRA?)
-- Qual o gatilho de entrada? (Evento, dor aguda, expansão?)
-- Estratégia de abordagem: primeiro contato, demo, proposta
-- Red flags: o que pode dar errado?
-
-=== REGRAS ===
-1. Seja DIRETO e PRÁTICO. O executivo vai ler isso antes de uma reunião.
-2. USE OS DADOS FINANCEIROS: Se tem CRA, Fiagro, auditoria — MENCIONE. Isso é ouro.
-3. REALPOLITIK: 35k hectares + auditoria = corporação. Trate assim.
-4. Separe as 4 seções com ||| (três pipes)
-5. Mínimo 300 palavras por seção. Máximo 600.
-6. Tom: profissional mas direto, como um briefing militar.
-"""
-
-    config = types.GenerateContentConfig(
-        temperature=0.4,
-        thinking_config=types.ThinkingConfig(thinking_budget=8192),
-        max_output_tokens=16000,
-    )
-    
-    text = _safe_call(client, MODEL_PRO, prompt, config, Priority.CRITICAL)
-    return text or "Erro ao gerar análise estratégica."
-
-
-# =============================================================================
-# AGENTE 5: AUDITOR DE QUALIDADE (Pro)
-# =============================================================================
-
-def agent_auditor_qualidade(client, texto_dossie: str, dados: dict) -> dict:
-    """
-    Agente Auditor de Qualidade.
-    Revisa o dossiê e pontua qualidade. Equivalente ao qualityGateService.ts.
-    """
-    prompt = f"""ATUE COMO: Editor-Chefe de um relatório de inteligência de vendas.
-Você está revisando o dossiê abaixo antes de ser entregue ao Executivo de Contas.
-
-=== DOSSIÊ A SER AUDITADO ===
-{texto_dossie[:8000]}
-
-=== DADOS BASE ===
-{json.dumps(dados, indent=2, ensure_ascii=False, default=str)[:4000]}
-
-=== AUDITORIA ===
-Avalie o dossiê em cada critério (0 a 10) e justifique brevemente:
-
-1. PRECISÃO: Os dados mencionados no texto correspondem ao JSON base?
-2. PROFUNDIDADE: A análise vai além do óbvio? Cita dados financeiros específicos?
-3. ACIONABILIDADE: O executivo sabe EXATAMENTE o que fazer depois de ler?
-4. PERSONALIZAÇÃO: O texto é específico para ESTA empresa ou poderia ser genérico?
-5. COMPLETUDE: As 4 seções estão presentes e completas?
-6. DADOS_FINANCEIROS: Fiagro, CRA, auditoria foram MENCIONADOS se existem nos dados?
+REGRAS: Seja FACTUAL. Não invente. Se não encontrar = 0/false. Confiança 0.0 a 1.0.
 
 Retorne APENAS JSON:
 {{
-    "scores": {{
-        "precisao": {{"nota": 8, "justificativa": "..."}},
-        "profundidade": {{"nota": 7, "justificativa": "..."}},
-        "acionabilidade": {{"nota": 9, "justificativa": "..."}},
-        "personalizacao": {{"nota": 8, "justificativa": "..."}},
-        "completude": {{"nota": 7, "justificativa": "..."}},
-        "dados_financeiros": {{"nota": 9, "justificativa": "..."}}
-    }},
-    "nota_final": 8.0,
-    "nivel": "EXCELENTE|BOM|ACEITAVEL|INSUFICIENTE",
-    "recomendacoes": ["Recomendação 1", "Recomendação 2"]
+    "nome_grupo": "Nome",
+    "hectares_total": 0,
+    "culturas": [],
+    "verticalizacao": {{campo: bool para CADA campo da lista}},
+    "regioes_atuacao": [],
+    "numero_fazendas": 0,
+    "cabecas_gado": 0,
+    "cabecas_aves": 0,
+    "cabecas_suinos": 0,
+    "area_florestal_ha": 0,
+    "area_irrigada_ha": 0,
+    "tecnologias_identificadas": [],
+    "confianca": 0.0
 }}"""
 
-    config = types.GenerateContentConfig(
-        temperature=0.2,
-        thinking_config=types.ThinkingConfig(thinking_budget=4096),
+    cfg = types.GenerateContentConfig(tools=[SEARCH_TOOL], temperature=0.1,
+                                       thinking_config=types.ThinkingConfig(thinking_budget=4096))
+    r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"nome_grupo": empresa, "confianca": 0.0}
+    cache.set("recon", ck, r, ttl=7200)
+    return r
+
+
+# =============================================================================
+# AGENTE 2: SNIPER FINANCEIRO
+# =============================================================================
+def agent_sniper_financeiro(client, empresa: str, nome_grupo: str = "") -> dict:
+    alvo = nome_grupo or empresa
+    ck = {"a": "fin", "e": alvo}
+    c = cache.get("fin", ck)
+    if c:
+        return c
+
+    prompt = f"""ATUE COMO: Analista Sênior de Mercado de Capitais — Agro.
+ALVO: "{alvo}" (pesquise também como "{empresa}")
+
+VASCULHE A WEB COM PROFUNDIDADE:
+
+1. CRA (Certificados de Recebíveis do Agronegócio): valor, data, estruturador, rating, séries
+2. FIAGRO: fundos relacionados, gestoras, tickers
+3. GOVERNANÇA: auditoria Big 4, conselho, natureza jurídica S.A./Ltda
+4. M&A: fusões, aquisições, parcerias estratégicas
+5. DADOS FINANCEIROS: capital social, faturamento, funcionários (Econodata, Casa dos Dados, LinkedIn, RAIS)
+6. PARCEIROS FINANCEIROS: bancos, gestoras, seguradoras
+7. DÍVIDA: debêntures, empréstimos BNDES, Plano Safra
+
+Retorne APENAS JSON:
+{{
+    "capital_social_estimado": 0,
+    "funcionarios_estimados": 0,
+    "faturamento_estimado": 0,
+    "movimentos_financeiros": ["Fato 1: ...", "Fato 2: ..."],
+    "fiagros_relacionados": [],
+    "cras_emitidos": [],
+    "parceiros_financeiros": [],
+    "auditorias": [],
+    "governanca_corporativa": false,
+    "resumo_financeiro": "texto",
+    "confianca": 0.0
+}}"""
+
+    cfg = types.GenerateContentConfig(tools=[SEARCH_TOOL], temperature=0.1,
+                                       thinking_config=types.ThinkingConfig(thinking_budget=4096))
+    r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"confianca": 0.0}
+    cache.set("fin", ck, r, ttl=7200)
+    return r
+
+
+# =============================================================================
+# AGENTE 3: CADEIA DE VALOR (NOVO)
+# =============================================================================
+def agent_cadeia_valor(client, empresa: str, dados_ops: dict) -> dict:
+    ck = {"a": "cadeia", "e": empresa}
+    c = cache.get("cadeia", ck)
+    if c:
+        return c
+
+    culturas = dados_ops.get('culturas', [])
+    prompt = f"""ATUE COMO: Consultor de Supply Chain do Agronegócio.
+ALVO: "{empresa}" — Culturas: {culturas}
+
+MAPEIE A CADEIA DE VALOR COMPLETA:
+
+1. POSIÇÃO NA CADEIA: É produtor primário? Integrador vertical? Processador? Trader?
+2. CLIENTES PRINCIPAIS: Para quem vende? (Tradings, indústrias, varejo, exportação direta)
+3. FORNECEDORES PRINCIPAIS: De quem compra insumos? (Bayer, Syngenta, Mosaic, etc)
+4. PARCERIAS ESTRATÉGICAS: JVs, contratos de longo prazo, integrações
+5. CANAIS DE VENDA: Cooperativa, trading, venda direta, marketplace
+6. INTEGRAÇÃO VERTICAL: Qual o nível? (baixa/media/alta/total)
+7. EXPORTAÇÃO: Exporta? Para quais mercados?
+8. CERTIFICAÇÕES: GlobalGAP, Rainforest, FSC, ABR, orgânico, Bonsucro, ISCC, etc
+
+Retorne APENAS JSON:
+{{
+    "posicao_cadeia": "produtor|integrador|processador|trader",
+    "clientes_principais": [],
+    "fornecedores_principais": [],
+    "parcerias_estrategicas": [],
+    "canais_venda": [],
+    "integracao_vertical_nivel": "baixa|media|alta|total",
+    "exporta": false,
+    "mercados_exportacao": [],
+    "certificacoes": [],
+    "confianca": 0.0
+}}"""
+
+    cfg = types.GenerateContentConfig(tools=[SEARCH_TOOL], temperature=0.1,
+                                       thinking_config=types.ThinkingConfig(thinking_budget=4096))
+    r = _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"confianca": 0.0}
+    cache.set("cadeia", ck, r, ttl=7200)
+    return r
+
+
+# =============================================================================
+# AGENTE 4: GRUPO ECONÔMICO (NOVO)
+# =============================================================================
+def agent_grupo_economico(client, empresa: str, cnpj_matriz: str = "") -> dict:
+    ck = {"a": "grupo", "e": empresa}
+    c = cache.get("grupo", ck)
+    if c:
+        return c
+
+    prompt = f"""ATUE COMO: Analista de Inteligência Corporativa.
+ALVO: "{empresa}" {f'(CNPJ Matriz: {cnpj_matriz})' if cnpj_matriz else ''}
+
+MAPEIE O GRUPO ECONÔMICO COMPLETO:
+
+1. CNPJ MATRIZ (empresa controladora)
+2. CNPJs de FILIAIS (mesma razão social, diferentes estados)
+3. CNPJs de COLIGADAS/CONTROLADAS (empresas do mesmo grupo com razões sociais diferentes)
+4. TOTAL de empresas no grupo
+5. CONTROLADORES/SÓCIOS PRINCIPAIS (pessoas físicas ou holdings)
+
+Busque em: Econodata, Casa dos Dados, Receita Federal, JUCESP/JUCEMG, site oficial.
+
+Retorne APENAS JSON:
+{{
+    "cnpj_matriz": "XX.XXX.XXX/XXXX-XX",
+    "cnpjs_filiais": ["lista de CNPJs"],
+    "cnpjs_coligadas": ["lista de CNPJs com nomes: CNPJ - Nome"],
+    "total_empresas": 0,
+    "controladores": ["Nome 1", "Nome 2"],
+    "confianca": 0.0
+}}"""
+
+    cfg = types.GenerateContentConfig(tools=[SEARCH_TOOL], temperature=0.1,
+                                       thinking_config=types.ThinkingConfig(thinking_budget=2048))
+    r = _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"confianca": 0.0}
+    cache.set("grupo", ck, r, ttl=7200)
+    return r
+
+
+# =============================================================================
+# AGENTE 5: INTEL DE MERCADO
+# =============================================================================
+def agent_intel_mercado(client, empresa: str, setor_info: str = "") -> dict:
+    ck = {"a": "intel", "e": empresa}
+    c = cache.get("intel", ck)
+    if c:
+        return c
+
+    prompt = f"""ATUE COMO: Analista de Inteligência Competitiva — Agro.
+ALVO: "{empresa}"
+{f'CONTEXTO: {setor_info}' if setor_info else ''}
+
+Busque NOTÍCIAS E SINAIS dos últimos 12 meses:
+
+1. NOTÍCIAS: Expansão? Crise? Investimento? Novo projeto? M&A?
+2. SINAIS DE COMPRA para ERP/tecnologia:
+   - Expansão de área, contratação de C-level, problemas operacionais
+   - Auditoria ou IPO (precisam de sistemas robustos)
+   - Troca de sistema (insatisfação com ERP atual)
+3. RISCOS: Processos judiciais, ambientais, inadimplência, recall
+4. CONCORRENTES: Quem mais atua no segmento/região
+5. OPORTUNIDADES: Janelas de venda, dores explícitas, gaps de mercado
+6. TENDÊNCIAS: O que está mudando no setor deles
+
+Retorne APENAS JSON:
+{{
+    "noticias_recentes": [{{"titulo": "", "resumo": "", "data_aprox": "", "relevancia": "alta|media|baixa"}}],
+    "sinais_compra": [],
+    "riscos": [],
+    "oportunidades": [],
+    "concorrentes": [],
+    "tendencias_setor": [],
+    "dores_identificadas": [],
+    "confianca": 0.0
+}}"""
+
+    cfg = types.GenerateContentConfig(tools=[SEARCH_TOOL], temperature=0.2,
+                                       thinking_config=types.ThinkingConfig(thinking_budget=4096))
+    r = _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"confianca": 0.0}
+    cache.set("intel", ck, r, ttl=3600)
+    return r
+
+
+# =============================================================================
+# AGENTE 6: ANÁLISE ESTRATÉGICA (Deep Thinking 12k)
+# =============================================================================
+def agent_analise_estrategica(client, dados: dict, sas: dict, contexto: str = "",
+                               exemplo_dossie: str = "") -> str:
+    prompt = f"""VOCÊ É: Sara, Analista Sênior de Inteligência de Vendas (Agro) da Senior Sistemas.
+Você prepara briefings estratégicos para Executivos de Contas.
+
+=== DADOS COMPLETOS DO ALVO ===
+{json.dumps(dados, indent=2, ensure_ascii=False, default=str)[:12000]}
+
+=== SCORE SAS 4.0 ===
+Score: {sas.get('score', 0)}/1000 — {sas.get('tier', 'N/D')}
+Breakdown: {json.dumps(sas.get('breakdown', {}), ensure_ascii=False)}
+
+{contexto}
+
+{f'=== EXEMPLO DE DOSSIÊ BEM FEITO ==={chr(10)}{exemplo_dossie}' if exemplo_dossie else ''}
+
+=== ESTRUTURA DO BRIEFING (separe seções com |||) ===
+
+SEÇÃO 1 — PERFIL & MERCADO:
+- Tamanho REAL da operação (hectares, cabeças, funcionários, faturamento)
+- Se tem CRA/Fiagro/Auditoria: é CORPORAÇÃO, não fazendeiro
+- Posição na cadeia de valor e nível de integração vertical
+- Grupo econômico: quantas empresas, quem controla
+- Contexto regional e competitivo
+
+SEÇÃO 2 — COMPLEXIDADE OPERACIONAL & DORES:
+- Complexidade por vertical: múltiplas culturas? Agroindústria? Pecuária integrada?
+- Dores ESPECÍFICAS (nunca genéricas) conectadas com os dados reais
+- Gaps de gestão prováveis baseados no porte e na verticalização
+- Compliance e regulação relevante para o setor deles
+- Cadeia de fornecimento: gargalos e oportunidades
+
+SEÇÃO 3 — FIT SENIOR (O PITCH):
+- Módulos Senior que resolvem CADA dor identificada
+- Argumento matador para ESTA conta
+- Se usa concorrente: argumento de troca com dados
+- ROI estimado: onde Senior gera economia/eficiência
+- Casos de referência do mesmo setor/porte
+
+SEÇÃO 4 — PLANO DE ATAQUE TÁTICO:
+- Decisor provável: cargo, perfil, como chegar nele
+- Timing ideal: safra/entressafra, pós-CRA, pós-expansão
+- Gatilho de entrada: evento, dor aguda, expansão, troca de sistema
+- Estratégia: primeiro contato → demo → proposta → fechamento
+- Red flags: o que pode dar errado, objeções prováveis
+- Quick wins: o que entregar primeiro para gerar valor rápido
+
+=== REGRAS ===
+1. DIRETO e PRÁTICO — briefing militar, sem enrolação
+2. USE DADOS FINANCEIROS: CRA, Fiagro, auditoria = ouro
+3. REALPOLITIK: 20k+ ha com auditoria = corporação
+4. Mínimo 400 palavras por seção, máximo 700
+5. Separe com ||| (exatamente 3 pipes entre seções)
+6. Cite dados numéricos e fontes quando possível
+"""
+
+    cfg = types.GenerateContentConfig(
+        temperature=0.35,
+        thinking_config=types.ThinkingConfig(thinking_budget=12288),
+        max_output_tokens=16000,
     )
-    
-    text = _safe_call(client, MODEL_PRO, prompt, config, Priority.NORMAL)
-    result = _clean_json(text) or {
-        "nota_final": 0,
-        "nivel": "INSUFICIENTE",
-        "recomendacoes": ["Erro na auditoria automática"],
-    }
-    return result
+    return _call(client, prompt, cfg, Priority.CRITICAL) or "Erro na análise."
 
 
 # =============================================================================
-# BUSCA MÁGICA DE CNPJ (Flash + Search)
+# AGENTE 7: AUDITOR DE QUALIDADE
 # =============================================================================
+def agent_auditor_qualidade(client, texto: str, dados: dict) -> dict:
+    prompt = f"""ATUE COMO: Editor-Chefe revisando um dossiê de inteligência de vendas.
 
-def buscar_cnpj_por_nome(client, nome_empresa: str) -> Optional[str]:
-    """
-    Busca Mágica: encontra CNPJ a partir do nome da empresa.
-    """
-    cache_key = {"busca_cnpj": nome_empresa}
-    cached = cache.get("busca_cnpj", cache_key)
-    if cached:
-        return cached
-    
-    prompt = f"""Encontre o CNPJ principal da empresa/grupo "{nome_empresa}" do agronegócio brasileiro.
-Busque em sites como Econodata, Casa dos Dados, Sócios Brasil, ou site oficial.
+=== DOSSIÊ ===
+{texto[:10000]}
+
+=== DADOS BASE ===
+{json.dumps(dados, indent=2, ensure_ascii=False, default=str)[:5000]}
+
+Avalie (0 a 10) e justifique:
+1. PRECISÃO: dados do texto batem com o JSON?
+2. PROFUNDIDADE: vai além do óbvio? Cita finanças?
+3. ACIONABILIDADE: executivo sabe o que fazer?
+4. PERSONALIZAÇÃO: específico para ESTA empresa?
+5. COMPLETUDE: 4 seções completas?
+6. DADOS_FINANCEIROS: CRA/Fiagro/auditoria mencionados se existem?
+
+Retorne JSON:
+{{
+    "scores": {{
+        "precisao": {{"nota": 0, "justificativa": ""}},
+        "profundidade": {{"nota": 0, "justificativa": ""}},
+        "acionabilidade": {{"nota": 0, "justificativa": ""}},
+        "personalizacao": {{"nota": 0, "justificativa": ""}},
+        "completude": {{"nota": 0, "justificativa": ""}},
+        "dados_financeiros": {{"nota": 0, "justificativa": ""}}
+    }},
+    "nota_final": 0.0,
+    "nivel": "EXCELENTE|BOM|ACEITAVEL|INSUFICIENTE",
+    "recomendacoes": []
+}}"""
+
+    cfg = types.GenerateContentConfig(temperature=0.2,
+                                       thinking_config=types.ThinkingConfig(thinking_budget=4096))
+    return _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {
+        "nota_final": 0, "nivel": "INSUFICIENTE", "recomendacoes": ["Erro na auditoria"]}
+
+
+# =============================================================================
+# BUSCA MÁGICA CNPJ
+# =============================================================================
+def buscar_cnpj_por_nome(client, nome: str) -> Optional[str]:
+    ck = {"b": nome}
+    c = cache.get("bcnpj", ck)
+    if c:
+        return c
+    prompt = f"""Encontre o CNPJ principal da empresa/grupo "{nome}" do agronegócio brasileiro.
+Busque em Econodata, Casa dos Dados, Sócios Brasil, site oficial.
 Retorne APENAS o CNPJ no formato XX.XXX.XXX/XXXX-XX ou "NAO_ENCONTRADO"."""
-
-    config = types.GenerateContentConfig(
-        tools=[types.Tool(google_search=types.GoogleSearch())],
-        temperature=0.0,
-    )
-    
-    text = _safe_call(client, MODEL_FLASH, prompt, config, Priority.HIGH)
+    cfg = types.GenerateContentConfig(tools=[SEARCH_TOOL], temperature=0.0)
+    text = _call(client, prompt, cfg, Priority.HIGH)
     if text and "NAO_ENCONTRADO" not in text:
-        # Tenta extrair CNPJ do texto
-        match = re.search(r'\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}', text)
-        if match:
-            cnpj = match.group(0)
-            cache.set("busca_cnpj", cache_key, cnpj, ttl=86400)
+        m = re.search(r'\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}', text)
+        if m:
+            cnpj = m.group(0)
+            cache.set("bcnpj", ck, cnpj, ttl=86400)
             return cnpj
-    
     return None
