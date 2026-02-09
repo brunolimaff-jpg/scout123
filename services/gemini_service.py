@@ -12,8 +12,8 @@ from google.genai import types
 from services.cache_service import cache
 from services.request_queue import request_queue, Priority
 
-# Configuração do Modelo
-MODEL = "gemini-2.0-flash" 
+# Voltando para o modelo rapido e estavel
+MODEL = "gemini-2.0-flash"
 
 # Ferramenta de Busca Nativa
 SEARCH = types.Tool(google_search=types.GoogleSearch())
@@ -32,7 +32,7 @@ DIRETRIZES DE COMBATE:
    - Sem saudações. Apenas dados.
 """
 
-# Alias para retrocompatibilidade com o Orchestrator antigo
+# Alias para retrocompatibilidade
 RAPTOR_IDENTITY = RADAR_IDENTITY 
 
 # === BASE DE CONHECIMENTO (SENIOR / GATEC) ===
@@ -90,7 +90,7 @@ def _call(client, prompt, config, prio=Priority.NORMAL):
 
 
 # ==============================================================================
-# AGENTE 1: RECON OPERACIONAL (MAPEAMENTO DE TERRENO)
+# AGENTE 1: RECON OPERACIONAL
 # ==============================================================================
 def agent_recon_operacional(client, empresa):
     ck = {"a":"recon_v4","e":empresa}
@@ -108,36 +108,23 @@ INSTRUCOES ESPECIAIS (CAÇA A HOLDING):
 EXTRAIA COM PRECISÃO DE SNIPER:
 1. Nome OFICIAL do Grupo Econômico (Holding).
 2. Área TOTAL em Hectares (Some todas as unidades/fazendas).
-   - Se encontrar dados antigos, faça uma projeção conservadora e avise.
 3. Culturas (Mix de Produção): Soja, Milho, Algodão, Cana, Pecuária (nº cabeças).
-4. Infraestrutura Vertical (ASSETS):
-   - Possui Armazéns/Silos próprios? (Indício de dor em Logística).
-   - Possui Algodoeira? Usina? Frigorífico? Fábrica de Ração?
-   - Possui Frota Própria? (Indício de dor em Manutenção).
-5. Tecnologia Atual:
-   - Menciona uso de SAP, TOTVS, JDLink, Climate FieldView, Solinftec?
-   - Tem conectividade no campo?
-
-ALERTA DE TAMANHO:
-- NÃO DESCARTE NADA. Apenas registre a área.
-- Se < 5.000 ha, marque "perfil_farming" = "SMB" (Small/Medium).
-- Se > 5.000 ha, marque "perfil_farming" = "ENTERPRISE".
+4. Infraestrutura Vertical (ASSETS): Silos, Algodoeira, Usina, Frota Própria.
+5. Tecnologia Atual: SAP, TOTVS, JDLink, Climate FieldView, Solinftec?
 
 Retorne JSON:
 {{"nome_grupo":"","hectares_total":0,"culturas":[],"verticalizacao":{{}},"regioes_atuacao":[],"numero_fazendas":0,"cabecas_gado":0,"tecnologias_identificadas":[],"perfil_farming":"ENTERPRISE|SMB","confianca":0.0}}"""
 
-    cfg = types.GenerateContentConfig(
-        tools=[SEARCH], 
-        temperature=0.1, 
-        thinking_config=types.ThinkingConfig(thinking_budget=2048)
-    )
+    # REMOVIDO thinking_config para evitar erro 400
+    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
+    
     r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"nome_grupo":empresa,"confianca":0.0}
     cache.set("recon", ck, r, ttl=7200)
     return r
 
 
 # ==============================================================================
-# AGENTE 2: SNIPER FINANCEIRO (RASTREIO DE DINHEIRO)
+# AGENTE 2: SNIPER FINANCEIRO
 # ==============================================================================
 def agent_sniper_financeiro(client, empresa, nome_grupo=""):
     alvo = nome_grupo or empresa
@@ -155,10 +142,6 @@ EXECUTE O PROTOCOLO "FOLLOW THE MONEY":
 3. Identifique Auditorias Externas (KPMG, Deloitte, PwC, EY).
 4. M&A e Expansão: Notícias de fusões, compras de terras ou novas unidades.
 
-ESTIMATIVAS (Se não houver balanço público):
-- Use Capital Social (Receita Federal) como piso.
-- Estime Faturamento base: ~R$ 5.000 a R$ 10.000 por hectare (grãos) ou compare com pares.
-
 Retorne JSON:
 {{"capital_social_estimado":0,"faturamento_estimado":0,"origem_faturamento":"balanco_publico|estimativa_mercado|modelo_ia","movimentos_financeiros":[],"cras_emitidos":[],"auditorias":[],"governanca_corporativa":false,"resumo_financeiro":"","confianca":0.0}}"""
 
@@ -169,7 +152,7 @@ Retorne JSON:
 
 
 # ==============================================================================
-# AGENTE 3: GRUPO ECONÔMICO (A TEIA CORPORATIVA)
+# AGENTE 3: GRUPO ECONÔMICO
 # ==============================================================================
 def agent_grupo_economico(client, empresa, cnpj_matriz=""):
     ck = {"a":"grupo_v4","e":empresa}
@@ -181,11 +164,10 @@ MISSAO: MAPEAR A TEIA CORPORATIVA (HOLDING & FILIAIS).
 ALVO: "{empresa}" {f'(CNPJ Raiz: {cnpj_matriz})' if cnpj_matriz else ''}
 
 PROCEDIMENTO DE VARREDURA:
-1. Identifique a HOLDING CONTROLADORA (A "Mãe"). Muitas vezes é uma S.A. ou Ltda com nome dos sócios.
-2. Liste as FILIAIS OPERACIONAIS (CNPJs produtivos).
-3. Busque COLIGADAS: Transportadoras do grupo, Tradings do grupo, Imobiliárias rurais.
-4. CROSS-CHECK DE SÓCIOS:
-   - Se os sócios são Pessoas Físicas (PF), busque "Sócio X + Agro" ou "Sócio X + Fazenda".
+1. Identifique a HOLDING CONTROLADORA (A "Mãe").
+2. Liste as FILIAIS OPERACIONAIS.
+3. Busque COLIGADAS: Transportadoras, Tradings, Imobiliárias.
+4. CROSS-CHECK DE SÓCIOS: Se PF, busque outras empresas deles.
 
 Retorne JSON:
 {{"cnpj_matriz":"","holding_controladora":"","filiais":[{{"cnpj":"","cidade":"","uf":"","atividade":""}}],"coligadas":[{{"razao_social":"","atividade":""}}],"total_empresas":0,"controladores":[],"confianca":0.0}}"""
@@ -197,7 +179,7 @@ Retorne JSON:
 
 
 # ==============================================================================
-# AGENTE 4: CADEIA DE VALOR (ONDE ELES ESTÃO)
+# AGENTE 4: CADEIA DE VALOR
 # ==============================================================================
 def agent_cadeia_valor(client, empresa, dados_ops):
     ck = {"a":"cadeia_v4","e":empresa}
@@ -209,12 +191,9 @@ MISSAO: POSICIONAMENTO NA CADEIA DE VALOR.
 ALVO: "{empresa}"
 
 DETERMINE:
-1. Grau de Verticalização: Eles só plantam (Baixo)? Eles armazenam (Médio)? Eles industrializam/vendem varejo (Alto)?
-   - Verticalização Alta = Alta aderência para Senior (Indústria + Varejo).
-2. Exportação: Eles têm "Habilitação Exportadora"? Vendem direto para China/Europa?
-   - Se sim, precisam de Compliance Fiscal robusto (Ponto para Senior).
-3. Certificações: RTRS, Bonsucro, RenovaBio?
-   - Exige rastreabilidade (Ponto para GAtec).
+1. Grau de Verticalização (Baixo/Médio/Alto).
+2. Exportação (Habilitação, Mercados).
+3. Certificações (RTRS, Bonsucro, RenovaBio).
 
 Retorne JSON:
 {{"posicao_cadeia":"","integracao_vertical_nivel":"BAIXA|MEDIA|ALTA","exporta":false,"mercados_exportacao":[],"certificacoes":[],"confianca":0.0}}"""
@@ -226,7 +205,7 @@ Retorne JSON:
 
 
 # ==============================================================================
-# AGENTE 5: INTEL MERCADO (SINAIS DE FUMAÇA)
+# AGENTE 5: INTEL MERCADO
 # ==============================================================================
 def agent_intel_mercado(client, empresa, setor_info=""):
     ck = {"a":"intel_v4","e":empresa}
@@ -237,10 +216,10 @@ def agent_intel_mercado(client, empresa, setor_info=""):
 MISSAO: SIGINT (SINAIS DE INTELIGÊNCIA) - ÚLTIMOS 12 MESES.
 ALVO: "{empresa}"
 
-RASTREIE SINAIS TÁTICOS PARA VENDAS:
-1. SINAL DE DOR: Notícias de prejuízo, problemas climáticos, multas ambientais?
-2. SINAL DE COMPRA: Anúncio de investimento, construção de nova fábrica, aquisição de terras?
-3. SINAL DE GESTÃO: Troca de CEO/CFO? Profissionalização da gestão familiar?
+RASTREIE SINAIS TÁTICOS:
+1. SINAL DE DOR (Prejuízo, Clima, Multas).
+2. SINAL DE COMPRA (Investimento, Obras, Aquisições).
+3. SINAL DE GESTÃO (Troca de Diretoria).
 
 Retorne JSON:
 {{"noticias_recentes":[{{"titulo":"","resumo":"","data_aprox":"","relevancia":"alta"}}],"sinais_compra":[],"riscos":[],"oportunidades":[],"dores_identificadas":[],"confianca":0.0}}"""
@@ -252,7 +231,7 @@ Retorne JSON:
 
 
 # ==============================================================================
-# AGENTE 6: PROFILER DECISORES (QUEM MANDA)
+# AGENTE 6: PROFILER DECISORES
 # ==============================================================================
 def agent_profiler_decisores(client, empresa, nome_grupo=""):
     alvo = nome_grupo or empresa
@@ -261,14 +240,14 @@ def agent_profiler_decisores(client, empresa, nome_grupo=""):
     if c: return c
     
     prompt = f"""{RADAR_IDENTITY}
-MISSAO: HUMINT (HUMAN INTELLIGENCE) - QUEM SÃO OS ALVOS.
+MISSAO: HUMINT - QUEM SÃO OS ALVOS.
 ALVO: "{alvo}"
 
-IDENTIFIQUE O "CIRCLE OF INFLUENCE":
-1. O CHEFE (Dono/CEO): Geralmente a família fundadora.
-2. O GUARDIÃO DO COFRE (CFO/Controller): O alvo principal para vender ERP Senior.
-3. O TECNÓLOGO (CIO/TI): O influenciador técnico.
-4. O OPERADOR (Diretor Agrícola/Industrial): O usuário da GAtec.
+IDENTIFIQUE:
+1. O CHEFE (Dono/CEO).
+2. O GUARDIÃO DO COFRE (CFO/Controller).
+3. O TECNÓLOGO (CIO/TI).
+4. O OPERADOR (Diretor Agrícola/Industrial).
 
 Retorne JSON:
 {{"decisores":[{{"nome":"","cargo":"","linkedin":"","relevancia_erp":"ALTA|MEDIA|BAIXA","perfil_comportamental":""}}],"estrutura_decisao":"FAMILIAR|PROFISSIONAL|MISTA","confianca":0.0}}"""
@@ -280,7 +259,7 @@ Retorne JSON:
 
 
 # ==============================================================================
-# AGENTE 7: TECH STACK (O INIMIGO ATUAL)
+# AGENTE 7: TECH STACK
 # ==============================================================================
 def agent_tech_stack(client, empresa, nome_grupo=""):
     alvo = nome_grupo or empresa
@@ -292,15 +271,10 @@ def agent_tech_stack(client, empresa, nome_grupo=""):
 MISSAO: RECONHECIMENTO DE SISTEMAS (TECH INTEL).
 ALVO: "{alvo}"
 
-DESCUBRA O QUE ELES USAM HOJE (PARA SUBSTITUIRMOS):
-1. Procure vagas de emprego da empresa. Elas dizem "Desejável conhecimento em Protheus", "SAP", "Excel avançado".
-2. Se pedem "Excel Avançado" para Coordenador Financeiro, é SINAL DE DOR (falta de ERP).
-3. Busque reclamações de sistemas ou notícias de implantação.
-
-MAPA DE ALVOS (CONCORRENTES):
-- TOTVS (Protheus/Datasul): Muito comum. Atacar com "Integração Nativa Agro" e "Cloud de verdade".
-- SAP (B1/S4): Caro e rígido. Atacar com "Custo Total (TCO)" e "Tropicalização Brasil".
-- SIAGRI: Bom no agro, fraco no backoffice. Atacar com "ERP Corporativo Robusto".
+DESCUBRA O QUE ELES USAM HOJE:
+1. Vagas de emprego (pedem Protheus? SAP?).
+2. Notícias de implantação.
+3. Reclamações.
 
 Retorne JSON:
 {{"erp_principal":{{"sistema":"","versao":"","fonte_evidencia":""}},"outros_sistemas":[],"vagas_ti_abertas":[{{"titulo":"","sistemas_mencionados":[]}}],"nivel_maturidade_ti":"BAIXO|MEDIO|ALTO","confianca":0.0}}"""
@@ -312,75 +286,57 @@ Retorne JSON:
 
 
 # ==============================================================================
-# AGENTE 8: ANÁLISE ESTRATÉGICA (O PLANO DE VOO)
+# AGENTE 8: ANÁLISE ESTRATÉGICA
 # ==============================================================================
 def agent_analise_estrategica(client, dados, sas, contexto=""):
     prompt = f"""{RADAR_IDENTITY}
-
 VOCÊ É O OFICIAL DE INTELIGÊNCIA DO PROJETO RADAR.
-GERAR RELATÓRIO DE MISSÃO (BDA - Battle Damage Assessment).
+GERAR RELATÓRIO DE MISSÃO (BDA).
 
 === DADOS DO ALVO ===
 {json.dumps(dados, indent=2, ensure_ascii=False, default=str)[:15000]}
 
 === SCORE SAS ===
-Score Tático: {sas.get('score',0)}/1000 — Classificação: {sas.get('tier','N/D')}
+Score: {sas.get('score',0)} — Tier: {sas.get('tier','N/D')}
 
 {PORTFOLIO_SENIOR}
 
-=== ESTRUTURA DO RELATÓRIO RADAR (Separe seções com |||) ===
+=== ESTRUTURA DO RELATÓRIO (Markdown, separe com |||) ===
 
 SEÇÃO 1 — RECONHECIMENTO DO ALVO (SITUATION REPORT):
-- Visão Raio-X: Quem são, tamanho real (ha), o que produzem.
-- Estrutura de Poder: Quem manda? Família ou Executivos? Holding ou Isolado?
-- STATUS: Se > 5.000 ha, declare "ALVO PRIORITÁRIO (HIGH TICKET)". Se menor, "ALVO TÁTICO".
+- Visão Raio-X: Tamanho, produção, quem manda.
+- STATUS: "ALVO PRIORITÁRIO" (>5k ha) ou "ALVO TÁTICO".
 
-SEÇÃO 2 — ANÁLISE DE VULNERABILIDADES (PAIN POINTS):
-- Onde eles estão sangrando? (Logística? Fiscal? Planilhas?)
-- Se usam TOTVS/SAP: Quais as dores comuns desses sistemas que a Senior resolve?
-- Se tem auditoria/CRA: A dor é Compliance e Governança (Senior brilha aqui).
+SEÇÃO 2 — ANÁLISE DE VULNERABILIDADES:
+- Dores (Logística? Fiscal?).
+- Problemas com atual ERP (TOTVS/SAP).
 
-SEÇÃO 3 — ARSENAL RECOMENDADO (SENIOR + GATEC):
-- Monte o "Loadout" ideal. Ex: "Vender SimpleFarm para o campo + ERP Senior para a Holding + HCM para a folha da safra".
-- Argumento Matador: Uma frase para o Hunter falar no telefone que vai travar a atenção do CEO.
+SEÇÃO 3 — ARSENAL RECOMENDADO:
+- Soluções Senior + GAtec específicas.
+- Argumento Matador.
 
-SEÇÃO 4 — PLANO DE VOO (ACTION PLAN):
-- Quem abordar primeiro? (O CFO ou o Agrônomo?)
-- Qual a "Isca"? (RenovaBio? Compliance Fiscal? Custo de Frota?)
-- Red Flags: O que pode derrubar a venda?
-
-REGRAS:
-- SEJA TÁTICO E DIRETO. Linguagem de Briefing Militar.
-- Use Markdown.
-- Separe as seções com "|||".
+SEÇÃO 4 — PLANO DE VOO:
+- Quem abordar? Qual a isca? Red Flags.
 """
-    cfg = types.GenerateContentConfig(temperature=0.4, thinking_config=types.ThinkingConfig(thinking_budget=4096))
+    # Removido thinking config aqui também
+    cfg = types.GenerateContentConfig(temperature=0.4)
     return _call(client, prompt, cfg, Priority.CRITICAL) or "FALHA NA GERAÇÃO DA ANÁLISE."
 
 
 # ==============================================================================
-# AGENTE 9: AUDITOR DE QUALIDADE (CONTROLE DE MISSÃO)
+# AGENTE 9: AUDITOR DE QUALIDADE
 # ==============================================================================
 def agent_auditor_qualidade(client, texto, dados):
     prompt = f"""{RADAR_IDENTITY}
-MISSAO: DEBRIEFING E CONTROLE DE QUALIDADE DO RELATÓRIO.
+MISSAO: DEBRIEFING E CONTROLE DE QUALIDADE.
 
-=== RELATÓRIO GERADO ===
-{texto[:10000]}
-
-=== DADOS BRUTOS ===
-{json.dumps(dados, indent=2, ensure_ascii=False, default=str)[:5000]}
-
-AVALIE COMO UM SUPERIOR HIERÁRQUICO (0-10):
-1. PRECISÃO: Os dados batem com a inteligência bruta?
-2. TÁTICA: O plano de ação é executável por um Hunter?
-3. FIT SENIOR: Os produtos indicados fazem sentido?
+Avalie (0-10): PRECISÃO, TÁTICA, FIT SENIOR.
 
 Retorne JSON:
 {{"scores":{{"precisao":{{"nota":0,"justificativa":""}},"acionabilidade":{{"nota":0,"justificativa":""}},"fit_senior":{{"nota":0,"justificativa":""}}}},"nota_final":0.0,"nivel":"EXCELENTE|BOM|ACEITAVEL|INSUFICIENTE","recomendacoes":[]}}"""
     
-    cfg = types.GenerateContentConfig(temperature=0.2, thinking_config=types.ThinkingConfig(thinking_budget=2048))
-    return _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"nota_final":0,"nivel":"INSUFICIENTE","recomendacoes":["Erro no processamento"]}
+    cfg = types.GenerateContentConfig(temperature=0.2)
+    return _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"nota_final":0,"nivel":"INSUFICIENTE","recomendacoes":["Erro"]}
 
 
 # ==============================================================================
@@ -392,10 +348,8 @@ def buscar_cnpj_por_nome(client, nome):
     if c: return c
     
     prompt = f"""{RADAR_IDENTITY}
-MISSAO: LOCALIZAR CNPJ MATRIZ.
-ALVO: "{nome}" (Agronegócio Brasil).
-Priorize CNPJs de Holdings, Matrizes ou S.A.
-Retorne APENAS o CNPJ (formato XX.XXX.XXX/XXXX-XX) ou "NAO_ENCONTRADO"."""
+MISSAO: LOCALIZAR CNPJ MATRIZ. ALVO: "{nome}".
+Priorize Holdings. Retorne APENAS CNPJ ou "NAO_ENCONTRADO"."""
     
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.0)
     text = _call(client, prompt, cfg, Priority.HIGH)
