@@ -50,22 +50,27 @@ def gerar_csv_report(d):
     writer.writerow(["Classificacao", d.sas_result.tier.value])
     return output.getvalue()
 
+# LOGS DE COMBATE AÉREO (Expandido para Loading Longo)
+LOGS_COMBATE = [
+    "📡 SYSTEM CHECK: RADAR ON. COMMs ON.",
+    "🔄 CALIBRATING SENSORS... (Ajustando Frequência)",
+    "⚠️ BOGEY DETECTED ON SECTOR 4. (Alvo Detectado)",
+    "📶 ESTABLISHING DATALINK WITH AWACS... (Conectando Base)",
+    "⚙️ COMPUTING INTERCEPT GEOMETRY... (Calculando Rota)",
+    "🔍 IDENTIFYING IFF (FRIEND OR FOE)... (Validando CNPJ)",
+    "🔒 HARD LOCK ACQUIRED - TONE! (Mira Travada)",
+    "🦊 FOX 3 AWAY! (Míssil de Inteligência Disparado)",
+    "⏱️ TIME TO IMPACT: CALCULATING...",
+    "🔥 ANALYZING HEAT SIGNATURE... (Varrendo Financeiro)",
+    "👤 SCANNING COCKPIT CREW... (Identificando Decisores)",
+    "💥 SPLASH ONE! GOOD EFFECT ON TARGET. (Extração Concluída)",
+    "📥 SECURING FLIGHT RECORDER DATA... (Baixando Dossiê)"
+]
+
 # ==============================================================================
 # 2. CONFIGURAÇÃO DA PÁGINA
 # ==============================================================================
 st.set_page_config(page_title="RADAR | FOX-3", page_icon="✈️", layout="wide", initial_sidebar_state="expanded")
-
-# LOGS DE COMBATE AÉREO (O "Loading" Gamificado)
-LOGS_COMBATE = [
-    "📡 RADAR SWEEP INITIATED... (Varrendo Setor)",
-    "⚠️ BOGEY DETECTED. (Alvo Detectado)",
-    "⚙️ COMPUTING INTERCEPT VECTOR... (Calculando Rota)",
-    "🔒 HARD LOCK CONFIRMED. (Mira Travada)",
-    "🦊 FOX 3 AWAY! (Míssil de Inteligência Disparado)",
-    "🚀 TRACKING TARGET... (Perseguindo CNPJ)",
-    "💥 SPLASH ONE! IMPACT CONFIRMED. (Extração Concluída)",
-    "📥 DOWNLOADING INTEL PACKET... (Baixando Dossiê)"
-]
 
 # ==============================================================================
 # 3. CSS — HUD AVIATION THEME (Sky Blue + Warning Amber)
@@ -99,7 +104,6 @@ div[data-testid="stMetric"], .intel-card {
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
     position: relative;
 }
-/* Linhas de Grade Decorativas nos Cards */
 div[data-testid="stMetric"]::before {
     content: ''; position: absolute; top: 0; left: 0; width: 10px; height: 10px;
     border-top: 2px solid #38BDF8; border-left: 2px solid #38BDF8;
@@ -238,7 +242,6 @@ with st.sidebar:
         </div>
     </div>""", unsafe_allow_html=True)
 
-    # Painel de Status Técnico
     st.markdown("""
     <div class="status-panel">
         <div>PWR: <span style="color:#10B981">NOMINAL</span></div>
@@ -248,7 +251,6 @@ with st.sidebar:
 
     try:
         api_key = st.secrets["GEMINI_API_KEY"]
-        # st.caption("✅ API KEY LOADED") # Oculto para limpar visual
     except:
         api_key = st.text_input("🔑 API KEY", type="password")
     
@@ -261,7 +263,6 @@ with st.sidebar:
     
     st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
     
-    # O GATILHO
     btn_label = "🦊 FOX 3 - DISPARAR" if target else "⛔ AGUARDANDO ALVO"
     btn = st.button(btn_label, type="primary", disabled=not target, use_container_width=True)
 
@@ -273,9 +274,7 @@ with st.sidebar:
 tab_radar, tab_intel = st.tabs(["📡 RADAR DISPLAY", "📂 INTEL PACKET"])
 
 with tab_radar:
-    # -------------------------------------------------------------------------
-    # TELA DE ESPERA (RADAR PASSIVO)
-    # -------------------------------------------------------------------------
+    # TELA DE ESPERA
     if not target and not st.session_state.dossie:
         st.markdown("""
         <div style="text-align:center;padding:80px 0;opacity:0.5;">
@@ -285,48 +284,39 @@ with tab_radar:
                 ENTER COORDINATES IN SIDEBAR TO ENGAGE.
             </div>
         </div>""", unsafe_allow_html=True)
-        
-        # Grid de Capacidades (Estilo Militar)
         c1,c2,c3 = st.columns(3)
         with c1: st.markdown('<div class="bda-card"><b>🗺️ RECON</b><br><small>Hectares, Culturas, Mapas</small></div>', unsafe_allow_html=True)
         with c2: st.markdown('<div class="bda-card"><b>💰 FINOPS</b><br><small>CRAs, Dívidas, M&A</small></div>', unsafe_allow_html=True)
         with c3: st.markdown('<div class="bda-card"><b>🤝 HUMAN INTEL</b><br><small>Decisores, LinkedIn</small></div>', unsafe_allow_html=True)
 
-    # -------------------------------------------------------------------------
-    # SEQUÊNCIA DE DISPARO (FOX 3 LOADING)
-    # -------------------------------------------------------------------------
+    # SEQUÊNCIA DE DISPARO
     if btn and target:
         st.session_state.dossie = None; st.session_state.logs = []
-        
-        # Container de Status de Combate
         with st.status("🚀 INITIATING COMBAT SEQUENCE...", expanded=True) as status:
-            log_area = st.empty()
-            
-            # Simula Logs de Sistema (Efeito visual)
-            for log in LOGS_COMBATE:
-                log_area.markdown(f"```\n> {log}\n```")
-                time.sleep(0.6) # Tempo dramático entre logs
+            log_container = st.empty()
+            log_history = ""
+            for i, log in enumerate(LOGS_COMBATE):
+                log_history += f"> {log}\n"
+                log_container.code(log_history, language="bash")
+                if i == len(LOGS_COMBATE) - 1:
+                    st.write("⚙️ DECRYPTING INTEL... (Aguarde o processamento final)")
+                else:
+                    time.sleep(random.uniform(0.4, 1.2))
             
             try:
-                # O processamento real acontece aqui
-                st.write("⚙️ EXTRACTION IN PROGRESS... (Isso pode levar alguns segundos)")
-                dossie = gerar_dossie_completo(target, api_key, target_cnpj, log_cb=lambda m: None) # Logs silenciosos no backend
+                dossie = gerar_dossie_completo(target, api_key, target_cnpj, log_cb=lambda m: None) 
                 st.session_state.dossie = dossie
-                
-                status.update(label="✅ TARGET NEUTRALIZED (DATA SECURED)", state="complete", expanded=False)
+                status.update(label="✅ MISSION ACCOMPLISHED (TARGET NEUTRALIZED)", state="complete", expanded=False)
                 st.rerun()
             except Exception as e:
                 st.error(f"❌ WEAPON MALFUNCTION: {e}")
                 status.update(label="⛔ MISSION FAILED", state="error")
 
-    # -------------------------------------------------------------------------
-    # RESULTADO (BATTLE DAMAGE ASSESSMENT)
-    # -------------------------------------------------------------------------
+    # RESULTADO
     if st.session_state.dossie:
         d = st.session_state.dossie
         nome = d.dados_operacionais.nome_grupo or d.empresa_alvo
         
-        # CABEÇALHO DO RESULTADO
         col_hud1, col_hud2 = st.columns([3, 1])
         with col_hud1:
             st.markdown(f'<div class="radar-header" style="font-size:2.5rem;text-align:left;">{nome.upper()}</div>', unsafe_allow_html=True)
@@ -341,10 +331,7 @@ with tab_radar:
         
         st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
         
-        # DASHBOARD TÁTICO (KPIs)
         op = d.dados_operacionais; fi = d.dados_financeiros
-        
-        # Lógica de Cor (Se > 5k ha = Verde, Senão = Vermelho)
         ha_color = "#10B981" if (op.hectares_total or 0) >= 5000 else "#EF4444"
         
         k1, k2, k3, k4 = st.columns(4)
@@ -353,13 +340,11 @@ with tab_radar:
         k3.metric("FAZENDAS", op.numero_fazendas if op.numero_fazendas else "N/A")
         k4.metric("FUNCIONÁRIOS", f"~{fi.funcionarios_estimados}" if fi.funcionarios_estimados else "N/A")
         
-        # CONTEÚDO GERADO PELA IA
         st.markdown('<div class="section-header">INFORMES DE INTELIGÊNCIA</div>', unsafe_allow_html=True)
         for sec in d.secoes_analise:
             with st.expander(f"{sec.icone} {sec.titulo}", expanded=True):
                 st.markdown(sec.conteudo)
                 
-        # BOTÃO DE DOWNLOAD
         st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
         csv_data = gerar_csv_report(d)
         c_dl1, c_dl2 = st.columns([1,3])
@@ -369,6 +354,7 @@ with tab_radar:
 with tab_intel:
     st.markdown("### 📂 RAW DATA PACKET")
     if st.session_state.dossie:
-        st.json(st.session_state.dossie.to_dict())
+        # CORREÇÃO: Serializador seguro em vez de .to_dict()
+        st.json(json.loads(json.dumps(st.session_state.dossie, default=lambda o: o.__dict__)))
     else:
         st.info("NO DATA AVAILABLE. EXECUTE FOX-3 FIRST.")
