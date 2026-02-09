@@ -12,7 +12,7 @@ from google.genai import types
 from services.cache_service import cache
 from services.request_queue import request_queue, Priority
 
-# Configuração do Modelo (Use flash para velocidade ou pro para raciocínio complexo)
+# Configuração do Modelo
 MODEL = "gemini-2.0-flash" 
 
 # Ferramenta de Busca Nativa
@@ -31,6 +31,9 @@ DIRETRIZES DE COMBATE:
    - Use termos como: "Visual confirmado", "Alvo travado", "Estrutura identificada".
    - Sem saudações. Apenas dados.
 """
+
+# Alias para retrocompatibilidade com o Orchestrator antigo
+RAPTOR_IDENTITY = RADAR_IDENTITY 
 
 # === BASE DE CONHECIMENTO (SENIOR / GATEC) ===
 PORTFOLIO_SENIOR = """
@@ -65,19 +68,14 @@ ARGUMENTOS DE ATAQUE (FOX-3):
 def _clean_json(text):
     """Limpa o output do Gemini para garantir JSON válido."""
     if not text: return None
-    # Tenta extrair bloco JSON markdown
     try:
         m = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
         if m: return json.loads(m.group(1))
     except: pass
-    
-    # Tenta encontrar o primeiro { e o último }
     try:
         m = re.search(r'\{.*\}', text, re.DOTALL)
         if m: return json.loads(m.group(0))
     except: pass
-    
-    # Tenta limpeza bruta
     try: return json.loads(text.replace('```json','').replace('```','').strip())
     except: return None
 
@@ -131,7 +129,7 @@ Retorne JSON:
     cfg = types.GenerateContentConfig(
         tools=[SEARCH], 
         temperature=0.1, 
-        thinking_config=types.ThinkingConfig(thinking_budget=2048) # Thinking rápido
+        thinking_config=types.ThinkingConfig(thinking_budget=2048)
     )
     r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"nome_grupo":empresa,"confianca":0.0}
     cache.set("recon", ck, r, ttl=7200)
@@ -154,9 +152,7 @@ ALVO: "{alvo}" (Investigue também variações e CNPJ raiz).
 EXECUTE O PROTOCOLO "FOLLOW THE MONEY":
 1. Busque por "Relação com Investidores (RI)", "Central de Resultados", "Balanço Patrimonial".
 2. Busque por emissões de CRA (Certificado de Recebíveis do Agronegócio) na CVM ou B3.
-   - CRAs revelam o tamanho real da dívida e da operação.
 3. Identifique Auditorias Externas (KPMG, Deloitte, PwC, EY).
-   - Se tem Big 4, tem governança para comprar ERP Tier 1.
 4. M&A e Expansão: Notícias de fusões, compras de terras ou novas unidades.
 
 ESTIMATIVAS (Se não houver balanço público):
@@ -190,7 +186,6 @@ PROCEDIMENTO DE VARREDURA:
 3. Busque COLIGADAS: Transportadoras do grupo, Tradings do grupo, Imobiliárias rurais.
 4. CROSS-CHECK DE SÓCIOS:
    - Se os sócios são Pessoas Físicas (PF), busque "Sócio X + Agro" ou "Sócio X + Fazenda".
-   - Muitas vezes o produtor tem vários CNPJs separados que formam um império invisível. Descubra isso.
 
 Retorne JSON:
 {{"cnpj_matriz":"","holding_controladora":"","filiais":[{{"cnpj":"","cidade":"","uf":"","atividade":""}}],"coligadas":[{{"razao_social":"","atividade":""}}],"total_empresas":0,"controladores":[],"confianca":0.0}}"""
@@ -245,9 +240,7 @@ ALVO: "{empresa}"
 RASTREIE SINAIS TÁTICOS PARA VENDAS:
 1. SINAL DE DOR: Notícias de prejuízo, problemas climáticos, multas ambientais?
 2. SINAL DE COMPRA: Anúncio de investimento, construção de nova fábrica, aquisição de terras?
-   - "Empresa X investirá R$ 100mi em nova unidade" = OPORTUNIDADE ERP.
 3. SINAL DE GESTÃO: Troca de CEO/CFO? Profissionalização da gestão familiar?
-   - Novo CFO geralmente quer trocar o ERP antigo.
 
 Retorne JSON:
 {{"noticias_recentes":[{{"titulo":"","resumo":"","data_aprox":"","relevancia":"alta"}}],"sinais_compra":[],"riscos":[],"oportunidades":[],"dores_identificadas":[],"confianca":0.0}}"""
@@ -276,8 +269,6 @@ IDENTIFIQUE O "CIRCLE OF INFLUENCE":
 2. O GUARDIÃO DO COFRE (CFO/Controller): O alvo principal para vender ERP Senior.
 3. O TECNÓLOGO (CIO/TI): O influenciador técnico.
 4. O OPERADOR (Diretor Agrícola/Industrial): O usuário da GAtec.
-
-Busque LinkedIn e notícias. Se for gestão familiar, identifique a "Segunda Geração" (filhos assumindo), pois eles são mais abertos a tecnologia.
 
 Retorne JSON:
 {{"decisores":[{{"nome":"","cargo":"","linkedin":"","relevancia_erp":"ALTA|MEDIA|BAIXA","perfil_comportamental":""}}],"estrutura_decisao":"FAMILIAR|PROFISSIONAL|MISTA","confianca":0.0}}"""
@@ -363,9 +354,33 @@ REGRAS:
 - Use Markdown.
 - Separe as seções com "|||".
 """
-    # Thinking budget alto para cruzar todas as infos
     cfg = types.GenerateContentConfig(temperature=0.4, thinking_config=types.ThinkingConfig(thinking_budget=4096))
     return _call(client, prompt, cfg, Priority.CRITICAL) or "FALHA NA GERAÇÃO DA ANÁLISE."
+
+
+# ==============================================================================
+# AGENTE 9: AUDITOR DE QUALIDADE (CONTROLE DE MISSÃO)
+# ==============================================================================
+def agent_auditor_qualidade(client, texto, dados):
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: DEBRIEFING E CONTROLE DE QUALIDADE DO RELATÓRIO.
+
+=== RELATÓRIO GERADO ===
+{texto[:10000]}
+
+=== DADOS BRUTOS ===
+{json.dumps(dados, indent=2, ensure_ascii=False, default=str)[:5000]}
+
+AVALIE COMO UM SUPERIOR HIERÁRQUICO (0-10):
+1. PRECISÃO: Os dados batem com a inteligência bruta?
+2. TÁTICA: O plano de ação é executável por um Hunter?
+3. FIT SENIOR: Os produtos indicados fazem sentido?
+
+Retorne JSON:
+{{"scores":{{"precisao":{{"nota":0,"justificativa":""}},"acionabilidade":{{"nota":0,"justificativa":""}},"fit_senior":{{"nota":0,"justificativa":""}}}},"nota_final":0.0,"nivel":"EXCELENTE|BOM|ACEITAVEL|INSUFICIENTE","recomendacoes":[]}}"""
+    
+    cfg = types.GenerateContentConfig(temperature=0.2, thinking_config=types.ThinkingConfig(thinking_budget=2048))
+    return _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"nota_final":0,"nivel":"INSUFICIENTE","recomendacoes":["Erro no processamento"]}
 
 
 # ==============================================================================
