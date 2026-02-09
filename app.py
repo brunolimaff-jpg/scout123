@@ -241,18 +241,48 @@ TIER_MAP = {"DIAMANTE 💎":"diamante","OURO 🥇":"ouro","PRATA 🥈":"prata","
 with tab_scout:
     if not target and not st.session_state.dossie:
         st.markdown("""
-        <div style="text-align:center;padding:60px 0 30px 0;">
+        <div style="text-align:center;padding:40px 0 20px 0;">
             <div style="font-size:4rem;margin-bottom:10px;">🦅</div>
             <div class="raptor-header">RAPTOR</div>
             <div class="raptor-subtitle">SISTEMA AUTÔNOMO DE CAÇA A LEADS HIGH-TICKET (&gt;5.000 ha)</div>
         </div>""", unsafe_allow_html=True)
+        st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
+
+        # === INPUT PRINCIPAL NA TELA (nao depende da sidebar) ===
+        st.markdown('<div class="section-header">🎯 DESIGNAÇÃO DO ALVO</div>', unsafe_allow_html=True)
+        inp1, inp2, inp3 = st.columns([3, 2, 1])
+        with inp1:
+            target_main = st.text_input("Empresa / Grupo Econômico", placeholder="Ex: SLC Agrícola, Amaggi, Bom Futuro...", key="target_main")
+        with inp2:
+            cnpj_main = st.text_input("CNPJ (opcional)", placeholder="XX.XXX.XXX/XXXX-XX", key="cnpj_main")
+            if cnpj_main:
+                cl_main = limpar_cnpj(cnpj_main)
+                if cl_main and validar_cnpj(cl_main):
+                    st.markdown(f'<span style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;color:#00FF41;">✅ {formatar_cnpj(cl_main)}</span>', unsafe_allow_html=True)
+                elif cl_main:
+                    st.markdown('<span style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;color:#FF4B4B;">⛔ CNPJ INVÁLIDO</span>', unsafe_allow_html=True)
+        with inp3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            btn_main = st.button("⚡ INICIAR CAÇA", type="primary", key="btn_main", use_container_width=True)
+
+        # Sync: se usou input principal, sobrescreve sidebar
+        if target_main:
+            target = target_main
+        if cnpj_main:
+            target_cnpj = cnpj_main
+        if btn_main and target_main:
+            btn = True
+            target = target_main
+            if cnpj_main:
+                target_cnpj = cnpj_main
+
         st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
         c1,c2,c3,c4 = st.columns(4)
         for col,icon,title,desc in [(c1,"🛰️","RECON","Hectares, culturas, verticalização"),(c2,"💰","FINANCEIRO","CRAs, Fiagros, M&A, governança"),(c3,"👔","DECISORES","C-Level, LinkedIn, perfil"),(c4,"💻","TECH STACK","ERP atual, vagas TI, maturidade")]:
             with col:
                 st.markdown(f'<div class="target-card" style="text-align:center;min-height:160px;"><div style="font-size:2rem;margin-bottom:8px;">{icon}</div><div style="font-family:\'Orbitron\',sans-serif;color:#00FF41;font-size:.85rem;letter-spacing:2px;margin-bottom:8px;">{title}</div><div style="font-family:\'JetBrains Mono\',monospace;color:#8B949E;font-size:.75rem;">{desc}</div></div>', unsafe_allow_html=True)
 
-    elif btn and target:
+    if btn and target:
         st.session_state.dossie = None; st.session_state.logs = []; st.session_state.step_results = []
         st.markdown(f'<div style="padding:10px 0;"><div style="font-family:\'Orbitron\',sans-serif;color:#00FF41;font-size:1.2rem;letter-spacing:3px;text-transform:uppercase;">🎯 ALVO ADQUIRIDO: {target.upper()}</div><div class="mono-text" style="margin-top:4px;">Iniciando varredura completa...</div></div>', unsafe_allow_html=True)
         progress_bar = st.progress(0.0); status = st.empty(); step_ctn = st.container()
