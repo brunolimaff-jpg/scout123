@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import time, random, json
+import time, random, json, csv, io
 from services.dossier_orchestrator import gerar_dossie_completo
 from services.cnpj_service import formatar_cnpj, validar_cnpj, limpar_cnpj
 from services.cache_service import cache
@@ -66,6 +66,52 @@ def _fmt_noticia(n):
             md += f"\n\n{' '.join(tags)}"
         return md
     return str(n)
+
+
+def gerar_csv_report(d):
+    """Gera CSV do raptor_intelligence_report."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    nome = d.dados_operacionais.nome_grupo or d.empresa_alvo
+    op = d.dados_operacionais; fi = d.dados_financeiros; cv = d.cadeia_valor; gr = d.grupo_economico
+    ha = op.hectares_total or 0
+    status = "ALVO DESCARTADO (BAIXO POTENCIAL)" if ha < 5000 else "ALVO CONFIRMADO - HIGH TICKET"
+    writer.writerow(["Campo", "Valor"])
+    writer.writerow(["Empresa", nome])
+    writer.writerow(["Status RAPTOR", status])
+    writer.writerow(["Score SAS", f"{d.sas_result.score}/1000"])
+    writer.writerow(["Tier", d.sas_result.tier.value])
+    writer.writerow(["Recomendacao", d.sas_result.recomendacao_comercial])
+    writer.writerow(["Hectares", f"{ha:,}"])
+    writer.writerow(["Culturas", _sj(op.culturas)])
+    writer.writerow(["Regioes", _sj(op.regioes_atuacao)])
+    writer.writerow(["Fazendas", op.numero_fazendas])
+    writer.writerow(["Funcionarios", fi.funcionarios_estimados])
+    writer.writerow(["Capital Estimado", f"R${fi.capital_social_estimado/1e6:.1f}M"])
+    writer.writerow(["Faturamento", f"R${fi.faturamento_estimado/1e6:.1f}M" if fi.faturamento_estimado else "N/D"])
+    writer.writerow(["Posicao Cadeia", cv.posicao_cadeia])
+    writer.writerow(["Integracao Vertical", cv.integracao_vertical_nivel])
+    writer.writerow(["Exporta", "Sim" if cv.exporta else "Nao"])
+    writer.writerow(["Grupo Total Empresas", gr.total_empresas])
+    writer.writerow(["CNPJ", d.cnpj or "N/D"])
+    if d.dados_cnpj:
+        writer.writerow(["Razao Social", d.dados_cnpj.razao_social])
+        writer.writerow(["CNAE", d.dados_cnpj.cnae_principal])
+        writer.writerow(["Municipio/UF", f"{d.dados_cnpj.municipio}/{d.dados_cnpj.uf}"])
+    ts = d.tech_stack or {}
+    erp = ts.get('erp_principal', {})
+    writer.writerow(["ERP Detectado", erp.get('sistema', 'N/I')])
+    writer.writerow(["Maturidade TI", ts.get('nivel_maturidade_ti', 'N/I')])
+    writer.writerow(["Vertical", d.sas_result.vertical_detectada])
+    writer.writerow(["Confidence", f"{d.sas_result.confidence_score:.0f}%"])
+    writer.writerow(["Musculo", f"{d.sas_result.breakdown.musculo}/400"])
+    writer.writerow(["Complexidade", f"{d.sas_result.breakdown.complexidade}/250"])
+    writer.writerow(["Gente", f"{d.sas_result.breakdown.gente}/200"])
+    writer.writerow(["Momento", f"{d.sas_result.breakdown.momento}/150"])
+    decs = d.decisores.get('decisores', []) if d.decisores else []
+    for i, dec in enumerate(decs[:5]):
+        writer.writerow([f"Decisor {i+1}", f"{dec.get('nome','')} - {dec.get('cargo','')} [{dec.get('relevancia_erp','')}]"])
+    return output.getvalue()
 
 
 st.set_page_config(page_title="RAPTOR | Intelligence System", page_icon="🦅", layout="wide", initial_sidebar_state="expanded")
@@ -164,8 +210,8 @@ with st.sidebar:
 
     st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
     st.markdown('<div style="font-family:\'JetBrains Mono\',monospace;font-size:.7rem;color:#8B949E;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">🎯 DESIGNAÇÃO DO ALVO</div>', unsafe_allow_html=True)
-    target = st.text_input("ALVO", placeholder="Ex: SLC Agricola, Amaggi...", label_visibility="collapsed")
-    target_cnpj = st.text_input("CNPJ (OPCIONAL)", placeholder="XX.XXX.XXX/XXXX-XX")
+    target = st.text_input("Empresa / Grupo", placeholder="Ex: SLC Agricola, Amaggi...", label_visibility="visible")
+    target_cnpj = st.text_input("CNPJ (opcional)", placeholder="XX.XXX.XXX/XXXX-XX")
     if target_cnpj:
         cl = limpar_cnpj(target_cnpj)
         if cl and validar_cnpj(cl):
@@ -242,6 +288,13 @@ with tab_scout:
         d = st.session_state.dossie
         nome = d.dados_operacionais.nome_grupo or d.empresa_alvo
         op = d.dados_operacionais; fi = d.dados_financeiros; cv = d.cadeia_valor; gr = d.grupo_economico
+
+        # === RAPTOR CLASSIFICATION: HIGH TICKET vs DESCARTADO ===
+        ha_total = op.hectares_total or 0
+        if ha_total > 0 and ha_total < 5000:
+            st.error(f"⛔ ALVO DESCARTADO (BAIXO POTENCIAL) — {ha_total:,} ha < 5.000 ha. Foco RAPTOR: operações High-Ticket.")
+        elif ha_total >= 5000:
+            st.success(f"✅ ALVO CONFIRMADO — HIGH TICKET | {ha_total:,} ha | Potencial: ALTO")
 
         # HEADER
         cs,ci,cq = st.columns([1,2,1])
@@ -479,20 +532,26 @@ with tab_scout:
                     ai = d.quality_report.audit_ia
                     st.markdown(f'<div style="margin-top:12px;font-family:\'JetBrains Mono\',monospace;"><span style="color:#00FF41;">Nota IA:</span> <span style="color:#FFF;font-weight:700;">{ai.get("nota_final","N/A")}/10</span> — <span style="color:#8B949E;">{ai.get("nivel","")}</span></div>', unsafe_allow_html=True)
 
-        # EXPORT
+        # EXPORT — PDF + CSV + MD + JSON
         st.markdown('<div class="section-header">📤 EXPORTAR DOSSIE</div>', unsafe_allow_html=True)
-        md = f"# Dossie: {nome}\n**Score:** {d.sas_result.score}/1000 — {d.sas_result.tier.value}\n\n"
+        md = f"# RAPTOR Intelligence Report: {nome}\n**Score:** {d.sas_result.score}/1000 — {d.sas_result.tier.value}\n\n"
         for sec in d.secoes_analise: md += f"## {sec.icone} {sec.titulo}\n\n{sec.conteudo}\n\n---\n\n"
-        ex1,ex2,ex3 = st.columns(3)
-        with ex1: st.download_button("📝 MARKDOWN", md, f"raptor_{nome.replace(' ','_')}.md", "text/markdown", use_container_width=True)
-        with ex2:
-            jd = json.dumps({"empresa":nome,"score":d.sas_result.score,"tier":d.sas_result.tier.value,"recomendacao":d.sas_result.recomendacao_comercial,"decisores":d.decisores,"tech_stack":d.tech_stack}, indent=2, ensure_ascii=False, default=str)
-            st.download_button("📊 JSON", jd, f"raptor_{nome.replace(' ','_')}.json", use_container_width=True)
-        with ex3:
+        csv_data = gerar_csv_report(d)
+        jd = json.dumps({"empresa":nome,"score":d.sas_result.score,"tier":d.sas_result.tier.value,"recomendacao":d.sas_result.recomendacao_comercial,"decisores":d.decisores,"tech_stack":d.tech_stack}, indent=2, ensure_ascii=False, default=str)
+        ex1,ex2,ex3,ex4 = st.columns(4)
+        with ex1:
             try:
                 pp = gerar_pdf(d); pf = open(pp, "rb")
-                st.download_button("📕 PDF", pf.read(), f"raptor_{nome.replace(' ','_')}.pdf", "application/pdf", use_container_width=True)
-            except Exception: st.warning("PDF indisponivel (instale fpdf2)")
+                st.download_button("📕 PDF", pf.read(), f"raptor_intelligence_report_{nome.replace(' ','_')}.pdf", "application/pdf", use_container_width=True)
+            except Exception as pdf_err:
+                st.error(f"PDF: {pdf_err}")
+                st.caption("Instale: pip install fpdf2")
+        with ex2:
+            st.download_button("📊 CSV", csv_data, f"raptor_intelligence_report_{nome.replace(' ','_')}.csv", "text/csv", use_container_width=True)
+        with ex3:
+            st.download_button("📝 MD", md, f"raptor_{nome.replace(' ','_')}.md", "text/markdown", use_container_width=True)
+        with ex4:
+            st.download_button("🔧 JSON", jd, f"raptor_{nome.replace(' ','_')}.json", use_container_width=True)
 
 # ═══════════════════════════════════════════════════════════════
 # COMPARADOR
