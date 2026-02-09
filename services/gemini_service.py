@@ -1,7 +1,7 @@
 """
-services/gemini_service.py — RAPTOR Intelligence Engine v4.0
-Motor IA com 9 Agentes Especializados
-Identidade: RAPTOR (substitui Sara)
+services/gemini_service.py — RADAR Intelligence Engine (Protocol FOX-3)
+Motor IA com 9 Agentes Especializados em Deep Discovery
+Identidade: RADAR AWACS (substitui Raptor/Sara)
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -12,406 +12,379 @@ from google.genai import types
 from services.cache_service import cache
 from services.request_queue import request_queue, Priority
 
-MODEL = "gemini-2.5-pro"
+# Configuração do Modelo (Use flash para velocidade ou pro para raciocínio complexo)
+MODEL = "gemini-2.0-flash" 
+
+# Ferramenta de Busca Nativa
 SEARCH = types.Tool(google_search=types.GoogleSearch())
 
-RAPTOR_IDENTITY = """VOCE E O RAPTOR — Sistema Autonomo de Inteligencia de Mercado para Agronegocio.
-FOCO EXCLUSIVO: grandes produtores rurais (> 5.000 hectares).
-TOM: MILITAR, DIRETO, ANALITICO, EXECUTIVO. Sem saudacoes. Direto ao ponto.
-Se o alvo tiver menos de 5.000 ha, classifique: "ALVO DESCARTADO (BAIXO POTENCIAL)".
-Formato: "Alvo Identificado", "Risco: Alto", "Potencial: Baixo".
+# === IDENTIDADE DO SISTEMA (RADAR AWACS) ===
+RADAR_IDENTITY = """VOCE E O SISTEMA RADAR (PROTOCOLO FOX-3) — Inteligencia de Mercado Tatica para Agronegocio.
+SUA MISSAO: VARREDURA COMPLETA E PROFUNDA.
+ALVO: Grandes Grupos, Holdings e Produtores Rurais.
+
+DIRETRIZES DE COMBATE:
+1. NÃO FILTRE NADA AGORA. Mapeie tudo, independente do tamanho. Deixe o operador decidir.
+2. BUSQUE A "BIG PICTURE": Não olhe apenas o CNPJ alvo. Procure a Holding, o Grupo Econômico, a Matriz.
+3. RASTREIE O DINHEIRO: Procure balanços consolidados, CRAs, Fiagros e RI (Relação com Investidores).
+4. TOM DE VOZ: Militar, Controladoria de Voo, Direto, Executivo.
+   - Use termos como: "Visual confirmado", "Alvo travado", "Estrutura identificada".
+   - Sem saudações. Apenas dados.
 """
 
+# === BASE DE CONHECIMENTO (SENIOR / GATEC) ===
 PORTFOLIO_SENIOR = """
-=== PORTFOLIO SENIOR SISTEMAS + GATEC (by Senior) ===
-A Senior Sistemas oferece suite completa para agro via parceria com GAtec:
+=== ARSENAL SENIOR SISTEMAS + GATEC ===
+A Senior Sistemas oferece a suite completa "Farm-to-Fork" via parceria GAtec:
 
-GATEC PRODUTOS (Especializados Agro):
-- SimpleFarm: Gestao Agricola completa (planejamento safra, custos por talhao, controle de insumos,
-  gestao automotiva/frota, manutencao industrial, originacao, logistica, processo industrial/beneficiamento, custos gerenciais)
-- SimpleViewer: BI Agricola com dashboards operacionais e gerenciais
-- Operis: Gestao de Armazens e Patios (recebimento, classificacao, expedicao)
-- CommerceSF: Comercializacao de commodities (compra, venda, contratos, hedge, barter, CPR)
-- CommerceLog: Logistica de transporte (frete, romaneio, balanca, rastreamento)
-- Mapfy: Mapas dinamicos, agricultura de precisao, monitoramento satelital
+1. GATEC (OPERACIONAL / CAMPO):
+- SimpleFarm: O "ERP do Campo". Planejamento de safra, custos por talhão, gestão de insumos.
+- SimpleViewer: Cockpit de BI Agrícola.
+- Operis: Gestão de Pátios e Armazens (Silos).
+- Mapfy: Agricultura de precisão e mapas.
 
-SENIOR ERP (Backoffice Corporativo):
-- ERP Gestao Empresarial: Financeiro, Contabil, Fiscal, Compras, Estoque
-- Compliance Fiscal: SPED, REINF, eSocial, Funrural, ICMS diferido
-- CRM Senior X: Gestao de relacionamento e vendas
-- ERP Banking: Conciliacao bancaria, cobranca, pagamentos
+2. SENIOR ERP (BACKOFFICE / CORPORATIVO):
+- ERP Gestão Empresarial: O Core. Financeiro, Contábil, Fiscal (Compliance nativo Brasil).
+- Diferencial: Compliance fiscal nativo (SPED, Funrural, LCDPR) vs SAP/Oracle (que precisam de localização).
 
-SENIOR LOGISTICA:
-- WMS: Gestao de Armazenagem (CD, silos, cameras frias)
-- TMS: Gestao de Transportes (embarcador e transportador)
-- YMS: Gestao de Patio (filas, docas, agendamento)
-- Torre de Controle: Visibilidade end-to-end
+3. SENIOR HCM (PESSOAS):
+- Folha, Ponto (com regras rurais NR-31), SST.
+- Diferencial: eSocial nativo e gestão de safra/turnos.
 
-SENIOR HCM (Gestao de Pessoas):
-- Folha de Pagamento: eSocial nativo, calculo de Funrural
-- Ponto Eletronico: Turnos de campo, sazonalidade, NR-31
-- RH/DP: Admissao digital, SST, juridico
-- Talent Management: LMS, desempenho, remuneracao, clima
+4. SENIOR LOGÍSTICA & CRM:
+- WMS (Armazém), TMS (Transporte).
+- CRM Senior X: Pipeline de vendas e relacionamento.
 
-SENIOR SEGURANCA:
-- Controle de Acesso: Portarias de fazenda, biometria
-- Gestao de Terceiros: Compliance de prestadores
-
-SENIOR FLOW:
-- BPM: Automacao de processos (aprovacoes, workflows)
-- GED: Gestao eletronica de documentos
-- SIGN: Assinatura digital de contratos
-
-DIFERENCIAIS vs CONCORRENTES:
-- UNICA plataforma que integra campo (SimpleFarm) + backoffice (ERP Senior) + pessoas (HCM) nativamente
-- Cloud-first com deploy em 3-6 meses (vs 12-24 meses SAP)
-- Custo 50-70% menor que SAP com funcionalidade equivalente
-- eSocial e compliance fiscal brasileiro nativo (TOTVS adapta, Senior eh nativo)
-- Gestao multi-empresa/multi-fazenda nativa (Siagri nao escala)
-- Suporte em portugues com especialistas agro (SAP/Oracle = ingles)
+ARGUMENTOS DE ATAQUE (FOX-3):
+- "A única plataforma que conecta o Talhão (GAtec) ao Balanço (Senior) sem gambiarras."
+- "SAP é caro e rígido. Senior é flexível e compliance Brasil nativo."
+- "Totvs é colcha de retalhos (sistemas comprados que não se falam). Senior + GAtec é integração nativa."
 """
 
 
 def _clean_json(text):
+    """Limpa o output do Gemini para garantir JSON válido."""
     if not text: return None
+    # Tenta extrair bloco JSON markdown
+    try:
+        m = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
+        if m: return json.loads(m.group(1))
+    except: pass
+    
+    # Tenta encontrar o primeiro { e o último }
     try:
         m = re.search(r'\{.*\}', text, re.DOTALL)
         if m: return json.loads(m.group(0))
-    except Exception: pass
+    except: pass
+    
+    # Tenta limpeza bruta
     try: return json.loads(text.replace('```json','').replace('```','').strip())
-    except Exception: return None
+    except: return None
 
 def _call(client, prompt, config, prio=Priority.NORMAL):
+    """Executa a chamada ao Gemini via fila de prioridade."""
     def _do():
         return client.models.generate_content(model=MODEL, contents=prompt, config=config).text
     try: return request_queue.execute(_do, priority=prio)
-    except Exception: return None
+    except Exception as e:
+        print(f"❌ ERRO GEMINI: {e}")
+        return None
 
 
+# ==============================================================================
+# AGENTE 1: RECON OPERACIONAL (MAPEAMENTO DE TERRENO)
+# ==============================================================================
 def agent_recon_operacional(client, empresa):
-    ck = {"a":"recon","e":empresa}
+    ck = {"a":"recon_v4","e":empresa}
     c = cache.get("recon", ck)
     if c: return c
-    prompt = f"""{RAPTOR_IDENTITY}
-MISSAO: Reconhecimento operacional do alvo.
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: RECONHECIMENTO OPERACIONAL PROFUNDO (DEEP SCAN).
 ALVO: "{empresa}"
 
-Busque em MULTIPLAS fontes (site oficial, LinkedIn, noticias, Econodata, relatorios).
+INSTRUCOES ESPECIAIS (CAÇA A HOLDING):
+- Não se limite ao site comercial. Procure por "Relatório de Sustentabilidade", "Demonstrações Financeiras", "Apresentação Institucional PDF".
+- Se a empresa for uma filial, descubra quem é o GRUPO MÃE.
 
-DESCUBRA COM PRECISAO:
-1. Nome oficial do grupo economico
-2. Area TOTAL em hectares (se faixa, use valor medio)
-3. TODAS as culturas: graos, fibras, cana, cafe, citrus, HF, florestal, pecuaria, etc
-4. TODA infraestrutura vertical (silos, armazens, algodoeira, usina, frigorifico, fabrica_racao, etc)
-5. Regioes/estados de atuacao
-6. Numero de fazendas/unidades
-7. Pecuaria: cabecas de gado, aves, suinos (se aplicavel)
-8. Area irrigada e area florestal (se aplicavel)
-9. Tecnologias: agricultura de precisao, drones, ERP, telemetria
+EXTRAIA COM PRECISÃO DE SNIPER:
+1. Nome OFICIAL do Grupo Econômico (Holding).
+2. Área TOTAL em Hectares (Some todas as unidades/fazendas).
+   - Se encontrar dados antigos, faça uma projeção conservadora e avise.
+3. Culturas (Mix de Produção): Soja, Milho, Algodão, Cana, Pecuária (nº cabeças).
+4. Infraestrutura Vertical (ASSETS):
+   - Possui Armazéns/Silos próprios? (Indício de dor em Logística).
+   - Possui Algodoeira? Usina? Frigorífico? Fábrica de Ração?
+   - Possui Frota Própria? (Indício de dor em Manutenção).
+5. Tecnologia Atual:
+   - Menciona uso de SAP, TOTVS, JDLink, Climate FieldView, Solinftec?
+   - Tem conectividade no campo?
 
-ALERTA RAPTOR: Se area total < 5.000 ha, inclua "alvo_baixo_potencial": true no JSON.
+ALERTA DE TAMANHO:
+- NÃO DESCARTE NADA. Apenas registre a área.
+- Se < 5.000 ha, marque "perfil_farming" = "SMB" (Small/Medium).
+- Se > 5.000 ha, marque "perfil_farming" = "ENTERPRISE".
 
-LISTA DE VERTICALIZACAO (marque true/false para CADA):
-silos, armazens_gerais, terminal_portuario, ferrovia_propria, frota_propria,
-algodoeira, sementeira, ubs, secador,
-agroindustria, usina_acucar_etanol, destilaria, esmagadora_soja, refinaria_oleo,
-fabrica_biodiesel, torrefacao_cafe, beneficiamento_arroz, fabrica_sucos, vinicultura,
-frigorifico_bovino, frigorifico_aves, frigorifico_suinos, frigorifico_peixes,
-laticinio, fabrica_racao, incubatorio,
-fabrica_fertilizantes, fabrica_defensivos, laboratorio_genetica, central_inseminacao, viveiro_mudas,
-cogeracao_energia, usina_solar, biodigestor, planta_biogas, creditos_carbono,
-florestal_eucalipto, florestal_pinus, fabrica_celulose, serraria,
-pivos_centrais, irrigacao_gotejamento, barragem_propria,
-agricultura_precisao, drones_proprios, estacoes_meteorologicas, telemetria_frota, erp_implantado
+Retorne JSON:
+{{"nome_grupo":"","hectares_total":0,"culturas":[],"verticalizacao":{{}},"regioes_atuacao":[],"numero_fazendas":0,"cabecas_gado":0,"tecnologias_identificadas":[],"perfil_farming":"ENTERPRISE|SMB","confianca":0.0}}"""
 
-REGRAS: Seja FACTUAL. Nao invente. Se nao encontrar = 0/false. Confianca 0.0 a 1.0.
-
-Retorne APENAS JSON:
-{{"nome_grupo":"","hectares_total":0,"culturas":[],"verticalizacao":{{}},"regioes_atuacao":[],"numero_fazendas":0,"cabecas_gado":0,"cabecas_aves":0,"cabecas_suinos":0,"area_florestal_ha":0,"area_irrigada_ha":0,"tecnologias_identificadas":[],"alvo_baixo_potencial":false,"confianca":0.0}}"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1, thinking_config=types.ThinkingConfig(thinking_budget=4096))
+    cfg = types.GenerateContentConfig(
+        tools=[SEARCH], 
+        temperature=0.1, 
+        thinking_config=types.ThinkingConfig(thinking_budget=2048) # Thinking rápido
+    )
     r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"nome_grupo":empresa,"confianca":0.0}
     cache.set("recon", ck, r, ttl=7200)
     return r
 
 
+# ==============================================================================
+# AGENTE 2: SNIPER FINANCEIRO (RASTREIO DE DINHEIRO)
+# ==============================================================================
 def agent_sniper_financeiro(client, empresa, nome_grupo=""):
     alvo = nome_grupo or empresa
-    ck = {"a":"fin","e":alvo}
+    ck = {"a":"fin_v4","e":alvo}
     c = cache.get("fin", ck)
     if c: return c
-    prompt = f"""{RAPTOR_IDENTITY}
-MISSAO: Sniper Financeiro — vasculhar mercado de capitais.
-ALVO: "{alvo}" (pesquise tambem como "{empresa}")
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: RASTREAMENTO FINANCEIRO E GOVERNANÇA.
+ALVO: "{alvo}" (Investigue também variações e CNPJ raiz).
 
-VASCULHE A WEB COM PROFUNDIDADE:
-1. CRA: valor, data, estruturador, rating, series
-2. FIAGRO: fundos, gestoras, tickers
-3. GOVERNANCA: auditoria Big 4, conselho, S.A./Ltda
-4. M&A: fusoes, aquisicoes, parcerias
-5. FINANCEIROS: capital social, faturamento, funcionarios (Econodata, Casa dos Dados, LinkedIn, RAIS)
-6. PARCEIROS: bancos, gestoras, seguradoras
-7. DIVIDA: debentures, BNDES, Plano Safra
+EXECUTE O PROTOCOLO "FOLLOW THE MONEY":
+1. Busque por "Relação com Investidores (RI)", "Central de Resultados", "Balanço Patrimonial".
+2. Busque por emissões de CRA (Certificado de Recebíveis do Agronegócio) na CVM ou B3.
+   - CRAs revelam o tamanho real da dívida e da operação.
+3. Identifique Auditorias Externas (KPMG, Deloitte, PwC, EY).
+   - Se tem Big 4, tem governança para comprar ERP Tier 1.
+4. M&A e Expansão: Notícias de fusões, compras de terras ou novas unidades.
 
-Retorne APENAS JSON:
-{{"capital_social_estimado":0,"funcionarios_estimados":0,"faturamento_estimado":0,"movimentos_financeiros":[],"fiagros_relacionados":[],"cras_emitidos":[],"parceiros_financeiros":[],"auditorias":[],"governanca_corporativa":false,"resumo_financeiro":"","confianca":0.0}}"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1, thinking_config=types.ThinkingConfig(thinking_budget=4096))
+ESTIMATIVAS (Se não houver balanço público):
+- Use Capital Social (Receita Federal) como piso.
+- Estime Faturamento base: ~R$ 5.000 a R$ 10.000 por hectare (grãos) ou compare com pares.
+
+Retorne JSON:
+{{"capital_social_estimado":0,"faturamento_estimado":0,"origem_faturamento":"balanco_publico|estimativa_mercado|modelo_ia","movimentos_financeiros":[],"cras_emitidos":[],"auditorias":[],"governanca_corporativa":false,"resumo_financeiro":"","confianca":0.0}}"""
+
+    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
     r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"confianca":0.0}
     cache.set("fin", ck, r, ttl=7200)
     return r
 
 
-def agent_cadeia_valor(client, empresa, dados_ops):
-    ck = {"a":"cadeia","e":empresa}
-    c = cache.get("cadeia", ck)
-    if c: return c
-    culturas = dados_ops.get('culturas',[])
-    prompt = f"""{RAPTOR_IDENTITY}
-MISSAO: Mapeamento da cadeia de valor.
-ALVO: "{empresa}" — Culturas: {culturas}
-
-MAPEIE:
-1. Posicao na cadeia: produtor/integrador/processador/trader
-2. Clientes principais (tradings, industrias, varejo, export)
-3. Fornecedores principais (Bayer, Syngenta, Mosaic, etc)
-4. Parcerias estrategicas
-5. Canais de venda
-6. Nivel de integracao vertical (baixa/media/alta/total)
-7. Exportacao: mercados
-8. Certificacoes: GlobalGAP, Rainforest, FSC, ABR, organico, Bonsucro, ISCC
-
-Retorne JSON:
-{{"posicao_cadeia":"","clientes_principais":[],"fornecedores_principais":[],"parcerias_estrategicas":[],"canais_venda":[],"integracao_vertical_nivel":"","exporta":false,"mercados_exportacao":[],"certificacoes":[],"confianca":0.0}}"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1, thinking_config=types.ThinkingConfig(thinking_budget=4096))
-    r = _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"confianca":0.0}
-    cache.set("cadeia", ck, r, ttl=7200)
-    return r
-
-
+# ==============================================================================
+# AGENTE 3: GRUPO ECONÔMICO (A TEIA CORPORATIVA)
+# ==============================================================================
 def agent_grupo_economico(client, empresa, cnpj_matriz=""):
-    ck = {"a":"grupo","e":empresa}
+    ck = {"a":"grupo_v4","e":empresa}
     c = cache.get("grupo", ck)
     if c: return c
-    prompt = f"""{RAPTOR_IDENTITY}
-MISSAO: Mapeamento do grupo economico completo.
-ALVO: "{empresa}" {f'(CNPJ: {cnpj_matriz})' if cnpj_matriz else ''}
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: MAPEAR A TEIA CORPORATIVA (HOLDING & FILIAIS).
+ALVO: "{empresa}" {f'(CNPJ Raiz: {cnpj_matriz})' if cnpj_matriz else ''}
 
-MAPEIE O GRUPO ECONOMICO COMPLETO com DETALHES:
-1. CNPJ MATRIZ
-2. TODAS as FILIAIS — para cada uma: CNPJ, cidade/UF, atividade principal
-3. TODAS as COLIGADAS/CONTROLADAS — CNPJ, razao social, cidade/UF, atividade
-4. Total de empresas no grupo
-5. Controladores/socios principais (PF ou holdings)
-6. Se ha holding: qual a holding controladora
-
-Busque em Econodata, Casa dos Dados, JUCESP, site oficial, Receita Federal.
+PROCEDIMENTO DE VARREDURA:
+1. Identifique a HOLDING CONTROLADORA (A "Mãe"). Muitas vezes é uma S.A. ou Ltda com nome dos sócios.
+2. Liste as FILIAIS OPERACIONAIS (CNPJs produtivos).
+3. Busque COLIGADAS: Transportadoras do grupo, Tradings do grupo, Imobiliárias rurais.
+4. CROSS-CHECK DE SÓCIOS:
+   - Se os sócios são Pessoas Físicas (PF), busque "Sócio X + Agro" ou "Sócio X + Fazenda".
+   - Muitas vezes o produtor tem vários CNPJs separados que formam um império invisível. Descubra isso.
 
 Retorne JSON:
-{{"cnpj_matriz":"","holding_controladora":"","filiais":[{{"cnpj":"","cidade":"","uf":"","atividade":""}}],"coligadas":[{{"cnpj":"","razao_social":"","cidade":"","uf":"","atividade":""}}],"total_empresas":0,"controladores":[],"confianca":0.0}}"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1, thinking_config=types.ThinkingConfig(thinking_budget=4096))
+{{"cnpj_matriz":"","holding_controladora":"","filiais":[{{"cnpj":"","cidade":"","uf":"","atividade":""}}],"coligadas":[{{"razao_social":"","atividade":""}}],"total_empresas":0,"controladores":[],"confianca":0.0}}"""
+
+    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
     r = _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"confianca":0.0}
     cache.set("grupo", ck, r, ttl=7200)
     return r
 
 
-def agent_intel_mercado(client, empresa, setor_info=""):
-    ck = {"a":"intel","e":empresa}
-    c = cache.get("intel", ck)
+# ==============================================================================
+# AGENTE 4: CADEIA DE VALOR (ONDE ELES ESTÃO)
+# ==============================================================================
+def agent_cadeia_valor(client, empresa, dados_ops):
+    ck = {"a":"cadeia_v4","e":empresa}
+    c = cache.get("cadeia", ck)
     if c: return c
-    prompt = f"""{RAPTOR_IDENTITY}
-MISSAO: Inteligencia competitiva e deteccao de sinais.
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: POSICIONAMENTO NA CADEIA DE VALOR.
 ALVO: "{empresa}"
-{f'CONTEXTO SETORIAL: {setor_info}' if setor_info else ''}
 
-Busque NOTICIAS E SINAIS dos ultimos 12 meses:
-1. Noticias: Expansao, crise, investimento, M&A
-2. Sinais de compra ERP/tech: expansao, C-level novo, problemas operacionais, auditoria/IPO
-3. Riscos: processos, ambientais, inadimplencia
-4. Concorrentes do segmento/regiao
-5. Oportunidades e tendencias
+DETERMINE:
+1. Grau de Verticalização: Eles só plantam (Baixo)? Eles armazenam (Médio)? Eles industrializam/vendem varejo (Alto)?
+   - Verticalização Alta = Alta aderência para Senior (Indústria + Varejo).
+2. Exportação: Eles têm "Habilitação Exportadora"? Vendem direto para China/Europa?
+   - Se sim, precisam de Compliance Fiscal robusto (Ponto para Senior).
+3. Certificações: RTRS, Bonsucro, RenovaBio?
+   - Exige rastreabilidade (Ponto para GAtec).
 
 Retorne JSON:
-{{"noticias_recentes":[{{"titulo":"","resumo":"","data_aprox":"","relevancia":"alta"}}],"sinais_compra":[],"riscos":[],"oportunidades":[],"concorrentes":[],"tendencias_setor":[],"dores_identificadas":[],"confianca":0.0}}"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.2, thinking_config=types.ThinkingConfig(thinking_budget=4096))
+{{"posicao_cadeia":"","integracao_vertical_nivel":"BAIXA|MEDIA|ALTA","exporta":false,"mercados_exportacao":[],"certificacoes":[],"confianca":0.0}}"""
+
+    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
+    r = _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"confianca":0.0}
+    cache.set("cadeia", ck, r, ttl=7200)
+    return r
+
+
+# ==============================================================================
+# AGENTE 5: INTEL MERCADO (SINAIS DE FUMAÇA)
+# ==============================================================================
+def agent_intel_mercado(client, empresa, setor_info=""):
+    ck = {"a":"intel_v4","e":empresa}
+    c = cache.get("intel", ck)
+    if c: return c
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: SIGINT (SINAIS DE INTELIGÊNCIA) - ÚLTIMOS 12 MESES.
+ALVO: "{empresa}"
+
+RASTREIE SINAIS TÁTICOS PARA VENDAS:
+1. SINAL DE DOR: Notícias de prejuízo, problemas climáticos, multas ambientais?
+2. SINAL DE COMPRA: Anúncio de investimento, construção de nova fábrica, aquisição de terras?
+   - "Empresa X investirá R$ 100mi em nova unidade" = OPORTUNIDADE ERP.
+3. SINAL DE GESTÃO: Troca de CEO/CFO? Profissionalização da gestão familiar?
+   - Novo CFO geralmente quer trocar o ERP antigo.
+
+Retorne JSON:
+{{"noticias_recentes":[{{"titulo":"","resumo":"","data_aprox":"","relevancia":"alta"}}],"sinais_compra":[],"riscos":[],"oportunidades":[],"dores_identificadas":[],"confianca":0.0}}"""
+
+    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.2)
     r = _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"confianca":0.0}
     cache.set("intel", ck, r, ttl=3600)
     return r
 
 
+# ==============================================================================
+# AGENTE 6: PROFILER DECISORES (QUEM MANDA)
+# ==============================================================================
 def agent_profiler_decisores(client, empresa, nome_grupo=""):
     alvo = nome_grupo or empresa
-    ck = {"a":"decisores","e":alvo}
+    ck = {"a":"decisores_v4","e":alvo}
     c = cache.get("decisores", ck)
     if c: return c
-    prompt = f"""{RAPTOR_IDENTITY}
-MISSAO: Profiling de decisores-chave.
-ALVO: "{alvo}" (tambem busque "{empresa}")
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: HUMINT (HUMAN INTELLIGENCE) - QUEM SÃO OS ALVOS.
+ALVO: "{alvo}"
 
-Mapeie TODOS os decisores-chave. Busque em: LinkedIn, site oficial, noticias, JUCESP, Econodata.
+IDENTIFIQUE O "CIRCLE OF INFLUENCE":
+1. O CHEFE (Dono/CEO): Geralmente a família fundadora.
+2. O GUARDIÃO DO COFRE (CFO/Controller): O alvo principal para vender ERP Senior.
+3. O TECNÓLOGO (CIO/TI): O influenciador técnico.
+4. O OPERADOR (Diretor Agrícola/Industrial): O usuário da GAtec.
 
-PARA CADA PESSOA:
-- Nome completo
-- Cargo/funcao atual
-- Tempo no cargo
-- Formacao academica
-- Experiencia anterior relevante
-- LinkedIn URL
-- Relevancia para venda de ERP/tecnologia (alta/media/baixa)
-
-MAPEIE:
-1. CEO / Presidente / Diretor Geral
-2. CFO / Diretor Financeiro / Controller
-3. CTO / CIO / Diretor de TI / Gerente de TI
-4. COO / Diretor de Operacoes / Diretor Agricola
-5. Dir. RH / Dir. Pessoas
-6. Dir. Comercial / Dir. Vendas
-7. Membros do Conselho
-8. Socios relevantes (se empresa familiar)
+Busque LinkedIn e notícias. Se for gestão familiar, identifique a "Segunda Geração" (filhos assumindo), pois eles são mais abertos a tecnologia.
 
 Retorne JSON:
-{{"decisores":[{{"nome":"","cargo":"","tempo_cargo":"","formacao":"","experiencia_anterior":"","linkedin":"","relevancia_erp":"alta","email_corporativo":""}}],"estrutura_decisao":"familiar|profissionalizada|mista","nivel_maturidade_gestao":"baixo|medio|alto","confianca":0.0}}"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1, thinking_config=types.ThinkingConfig(thinking_budget=6144))
+{{"decisores":[{{"nome":"","cargo":"","linkedin":"","relevancia_erp":"ALTA|MEDIA|BAIXA","perfil_comportamental":""}}],"estrutura_decisao":"FAMILIAR|PROFISSIONAL|MISTA","confianca":0.0}}"""
+
+    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
     r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"decisores":[],"confianca":0.0}
     cache.set("decisores", ck, r, ttl=7200)
     return r
 
 
+# ==============================================================================
+# AGENTE 7: TECH STACK (O INIMIGO ATUAL)
+# ==============================================================================
 def agent_tech_stack(client, empresa, nome_grupo=""):
     alvo = nome_grupo or empresa
-    ck = {"a":"tech","e":alvo}
+    ck = {"a":"tech_v4","e":alvo}
     c = cache.get("tech", ck)
     if c: return c
-    prompt = f"""{RAPTOR_IDENTITY}
-MISSAO: Deteccao de tech stack do alvo.
-ALVO: "{alvo}" (tambem "{empresa}")
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: RECONHECIMENTO DE SISTEMAS (TECH INTEL).
+ALVO: "{alvo}"
 
-Investigue QUAL SISTEMA/ERP esta empresa utiliza.
+DESCUBRA O QUE ELES USAM HOJE (PARA SUBSTITUIRMOS):
+1. Procure vagas de emprego da empresa. Elas dizem "Desejável conhecimento em Protheus", "SAP", "Excel avançado".
+2. Se pedem "Excel Avançado" para Coordenador Financeiro, é SINAL DE DOR (falta de ERP).
+3. Busque reclamações de sistemas ou notícias de implantação.
 
-BUSQUE PISTAS EM:
-1. LinkedIn: vagas mencionando sistemas
-2. LinkedIn: perfis de funcionarios
-3. Site: pagina de carreiras/vagas
-4. Google: "empresa X" + "ERP" ou "TOTVS" ou "SAP" ou "Siagri" ou "Senior"
-5. Noticias: implantacao de sistema
-6. Reclame Aqui / Glassdoor
-7. Integradores e consultorias
-
-SISTEMAS PARA VERIFICAR:
-- ERP: TOTVS (Protheus/RM/Datasul), SAP (S4HANA/B1), Senior, Siagri, Datacoper, Oracle, Sage
-- Agro: Aegro, Solinftec, Agrosmart, Climate FieldView, Agrotools, SimpleFarm
-- RH: TOTVS RH, Senior HCM, ADP, Gupy
-- BI: Power BI, Tableau, Qlik
+MAPA DE ALVOS (CONCORRENTES):
+- TOTVS (Protheus/Datasul): Muito comum. Atacar com "Integração Nativa Agro" e "Cloud de verdade".
+- SAP (B1/S4): Caro e rígido. Atacar com "Custo Total (TCO)" e "Tropicalização Brasil".
+- SIAGRI: Bom no agro, fraco no backoffice. Atacar com "ERP Corporativo Robusto".
 
 Retorne JSON:
-{{"erp_principal":{{"sistema":"","versao":"","fonte_evidencia":"","confianca":0.0}},"outros_sistemas":[{{"tipo":"","sistema":"","fonte_evidencia":""}}],"vagas_ti_abertas":[{{"titulo":"","plataforma":"","sistemas_mencionados":[]}}],"nivel_maturidade_ti":"baixo|medio|alto","investimento_ti_percebido":"baixo|medio|alto","dores_tech_identificadas":[],"confianca":0.0}}"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1, thinking_config=types.ThinkingConfig(thinking_budget=4096))
+{{"erp_principal":{{"sistema":"","versao":"","fonte_evidencia":""}},"outros_sistemas":[],"vagas_ti_abertas":[{{"titulo":"","sistemas_mencionados":[]}}],"nivel_maturidade_ti":"BAIXO|MEDIO|ALTO","confianca":0.0}}"""
+
+    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
     r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"confianca":0.0}
     cache.set("tech", ck, r, ttl=7200)
     return r
 
 
+# ==============================================================================
+# AGENTE 8: ANÁLISE ESTRATÉGICA (O PLANO DE VOO)
+# ==============================================================================
 def agent_analise_estrategica(client, dados, sas, contexto=""):
-    prompt = f"""{RAPTOR_IDENTITY}
+    prompt = f"""{RADAR_IDENTITY}
 
-VOCE E: RAPTOR, Analista de Inteligencia Tatica da Senior Sistemas / GAtec.
-Voce prepara DOSSIES DE INTELIGENCIA para Executivos de Contas antes de operacoes comerciais.
+VOCÊ É O OFICIAL DE INTELIGÊNCIA DO PROJETO RADAR.
+GERAR RELATÓRIO DE MISSÃO (BDA - Battle Damage Assessment).
 
 === DADOS DO ALVO ===
-{json.dumps(dados, indent=2, ensure_ascii=False, default=str)[:14000]}
+{json.dumps(dados, indent=2, ensure_ascii=False, default=str)[:15000]}
 
-=== SCORE SAS 4.0 ===
-Score: {sas.get('score',0)}/1000 — {sas.get('tier','N/D')}
-Breakdown: {json.dumps(sas.get('breakdown',{}), ensure_ascii=False)}
-
-{contexto}
+=== SCORE SAS ===
+Score Tático: {sas.get('score',0)}/1000 — Classificação: {sas.get('tier','N/D')}
 
 {PORTFOLIO_SENIOR}
 
-=== ESTRUTURA DO DOSSIE DE INTELIGENCIA (separe secoes com |||) ===
+=== ESTRUTURA DO RELATÓRIO RADAR (Separe seções com |||) ===
 
-SECAO 1 — PERFIL DO ALVO (RECONHECIMENTO COMPLETO):
-- RESUMO EXECUTIVO: quem e, o que faz, tamanho, relevancia
-- Dados factuais: hectares, cabecas, funcionarios, faturamento, capital
-- Grupo economico: quantas empresas, quem controla, holding
-- Posicao na cadeia de valor e nivel de integracao
-- CLASSIFICACAO: Se < 5.000 ha, inicie com "⛔ ALVO DESCARTADO (BAIXO POTENCIAL)"
-- Se >= 5.000 ha: "✅ ALVO CONFIRMADO — HIGH TICKET"
-- CRA/Fiagro/Auditoria: detalhe
-- Contexto regional e competitivo
+SEÇÃO 1 — RECONHECIMENTO DO ALVO (SITUATION REPORT):
+- Visão Raio-X: Quem são, tamanho real (ha), o que produzem.
+- Estrutura de Poder: Quem manda? Família ou Executivos? Holding ou Isolado?
+- STATUS: Se > 5.000 ha, declare "ALVO PRIORITÁRIO (HIGH TICKET)". Se menor, "ALVO TÁTICO".
 
-SECAO 2 — VULNERABILIDADES OPERACIONAIS & DORES:
-- Complexidade: multiplas culturas? Agroindustria? Pecuaria integrada?
-- Dores ESPECIFICAS conectadas com dados reais
-- Gaps de gestao provaveis baseados no porte
-- Tech stack atual: qual sistema usam? Dores com ele?
-- Compliance e regulacao relevante
-- CLASSIFICACAO DE RISCO: Alto/Medio/Baixo
+SEÇÃO 2 — ANÁLISE DE VULNERABILIDADES (PAIN POINTS):
+- Onde eles estão sangrando? (Logística? Fiscal? Planilhas?)
+- Se usam TOTVS/SAP: Quais as dores comuns desses sistemas que a Senior resolve?
+- Se tem auditoria/CRA: A dor é Compliance e Governança (Senior brilha aqui).
 
-SECAO 3 — MAPEAMENTO DE SOLUCOES (ARSENAL SENIOR/GATEC):
-- Para CADA dor, indique o modulo ESPECIFICO Senior/GAtec que resolve
-- Se usa concorrente (TOTVS/SAP/Siagri): argumento ESPECIFICO de troca
-- ROI estimado com numeros
-- Casos de referencia do mesmo setor/porte
-- POTENCIAL DE VENDA: Alto/Medio/Baixo + ticket estimado
+SEÇÃO 3 — ARSENAL RECOMENDADO (SENIOR + GATEC):
+- Monte o "Loadout" ideal. Ex: "Vender SimpleFarm para o campo + ERP Senior para a Holding + HCM para a folha da safra".
+- Argumento Matador: Uma frase para o Hunter falar no telefone que vai travar a atenção do CEO.
 
-SECAO 4 — PLANO DE ATAQUE TATICO:
-- DECISORES: nomes reais, cargos, como chegar neles
-- TIMING: safra/entressafra, pos-CRA, pos-expansao
-- GATILHO: evento ou dor aguda como porta de entrada
-- ESTRATEGIA: primeiro contato -> demo -> proposta -> fechamento
-- FIRST CALL SCRIPT: o que falar nos primeiros 2 minutos
-- OBJECOES provaveis e como rebater
-- RED FLAGS: o que pode dar errado
-- QUICK WINS: valor rapido
+SEÇÃO 4 — PLANO DE VOO (ACTION PLAN):
+- Quem abordar primeiro? (O CFO ou o Agrônomo?)
+- Qual a "Isca"? (RenovaBio? Compliance Fiscal? Custo de Frota?)
+- Red Flags: O que pode derrubar a venda?
 
-=== REGRAS RAPTOR ===
-1. DIRETO e TATICO — briefing de operacao
-2. USE NOMES REAIS dos decisores
-3. CITE MODULOS ESPECIFICOS Senior/GAtec
-4. Minimo 500 palavras por secao
-5. Separe com ||| (3 pipes)
-6. Se alvo < 5.000 ha: alerte logo no inicio
+REGRAS:
+- SEJA TÁTICO E DIRETO. Linguagem de Briefing Militar.
+- Use Markdown.
+- Separe as seções com "|||".
 """
-    cfg = types.GenerateContentConfig(temperature=0.35, thinking_config=types.ThinkingConfig(thinking_budget=12288), max_output_tokens=16000)
-    return _call(client, prompt, cfg, Priority.CRITICAL) or "Erro na analise."
+    # Thinking budget alto para cruzar todas as infos
+    cfg = types.GenerateContentConfig(temperature=0.4, thinking_config=types.ThinkingConfig(thinking_budget=4096))
+    return _call(client, prompt, cfg, Priority.CRITICAL) or "FALHA NA GERAÇÃO DA ANÁLISE."
 
 
-def agent_auditor_qualidade(client, texto, dados):
-    prompt = f"""{RAPTOR_IDENTITY}
-MISSAO: Auditoria de qualidade do dossie de inteligencia.
-
-=== DOSSIE ===
-{texto[:10000]}
-
-=== DADOS ===
-{json.dumps(dados, indent=2, ensure_ascii=False, default=str)[:5000]}
-
-Avalie (0-10):
-1. PRECISAO: dados batem com JSON?
-2. PROFUNDIDADE: cita financas, decisores, tech stack?
-3. ACIONABILIDADE: executivo sabe o que fazer?
-4. PERSONALIZACAO: especifico para ESTA empresa?
-5. COMPLETUDE: 4 secoes completas?
-6. FIT_SENIOR: menciona modulos especificos Senior/GAtec?
-7. DECISORES: nomes e cargos reais mencionados?
-
-Retorne JSON:
-{{"scores":{{"precisao":{{"nota":0,"justificativa":""}},"profundidade":{{"nota":0,"justificativa":""}},"acionabilidade":{{"nota":0,"justificativa":""}},"personalizacao":{{"nota":0,"justificativa":""}},"completude":{{"nota":0,"justificativa":""}},"fit_senior":{{"nota":0,"justificativa":""}},"decisores":{{"nota":0,"justificativa":""}}}},"nota_final":0.0,"nivel":"EXCELENTE|BOM|ACEITAVEL|INSUFICIENTE","recomendacoes":[]}}"""
-    cfg = types.GenerateContentConfig(temperature=0.2, thinking_config=types.ThinkingConfig(thinking_budget=4096))
-    return _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"nota_final":0,"nivel":"INSUFICIENTE","recomendacoes":["Erro"]}
-
-
+# ==============================================================================
+# UTILITÁRIO: BUSCA CNPJ
+# ==============================================================================
 def buscar_cnpj_por_nome(client, nome):
     ck = {"b":nome}
     c = cache.get("bcnpj", ck)
     if c: return c
-    prompt = f"""{RAPTOR_IDENTITY}
-MISSAO: Localizar CNPJ do alvo.
-Encontre o CNPJ principal da empresa/grupo "{nome}" do agronegocio brasileiro.
-Busque em Econodata, Casa dos Dados, Socios Brasil, site oficial.
-Retorne APENAS o CNPJ no formato XX.XXX.XXX/XXXX-XX ou "NAO_ENCONTRADO"."""
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: LOCALIZAR CNPJ MATRIZ.
+ALVO: "{nome}" (Agronegócio Brasil).
+Priorize CNPJs de Holdings, Matrizes ou S.A.
+Retorne APENAS o CNPJ (formato XX.XXX.XXX/XXXX-XX) ou "NAO_ENCONTRADO"."""
+    
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.0)
     text = _call(client, prompt, cfg, Priority.HIGH)
-    if text and "NAO_ENCONTRADO" not in text:
+    if text:
         m = re.search(r'\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}', text)
         if m:
             cnpj = m.group(0)
