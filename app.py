@@ -125,38 +125,40 @@ FRASES = [
 ]
 
 # ==============================================================================
-# 3. CSS — TITANIUM / TACTICAL THEME (REDESIGNED FOR READABILITY)
+# 3. CSS — TITANIUM GREY THEME (VISIBILITY FIX)
 # ==============================================================================
 st.markdown("""<style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;600;800&family=Orbitron:wght@500;700;900&display=swap');
 
 /* --- BASE COLORS & FONTS --- */
+/* Fundo Principal - Cinza Chumbo/Titânio (NÃO PRETO) */
 .stApp {
-    background-color: #0E1117 !important; /* Deep Slate (not black) */
-    color: #E6EDF3 !important; /* Off-white for readability */
+    background-color: #1B2028 !important; 
+    color: #E6EDF3 !important;
     font-family: 'Inter', sans-serif !important;
 }
 
 /* --- SIDEBAR --- */
+/* Sidebar um pouco mais clara para contraste */
 section[data-testid="stSidebar"] {
-    background-color: #161B22 !important; /* Navy Grey */
-    border-right: 1px solid #30363D !important;
+    background-color: #212630 !important; 
+    border-right: 1px solid #363E4B !important;
 }
 section[data-testid="stSidebar"] .stMarkdown p, 
 section[data-testid="stSidebar"] .stMarkdown span {
-    color: #C9D1D9 !important;
+    color: #D1D5DB !important;
 }
 
 /* --- METRICS & CARDS --- */
 div[data-testid="stMetric"] {
-    background-color: #161B22 !important;
-    border: 1px solid #30363D !important;
+    background-color: #2A323E !important; /* Card background Lighter */
+    border: 1px solid #3E4C5E !important;
     border-radius: 8px !important;
     padding: 15px !important;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
 }
 div[data-testid="stMetric"] label {
-    color: #8B949E !important; /* Muted text */
+    color: #9CA3AF !important; /* Lighter grey for labels */
     font-family: 'JetBrains Mono', monospace !important;
     font-size: 0.75rem !important;
 }
@@ -168,166 +170,168 @@ div[data-testid="stMetric"] [data-testid="stMetricValue"] {
 
 /* --- BUTTONS --- */
 .stButton>button {
-    background: linear-gradient(180deg, #238636, #2EA043) !important; /* Tactical Green (Github Actions style) */
+    background: linear-gradient(180deg, #10B981, #059669) !important; /* Emerald Tactical Green */
     color: #FFFFFF !important;
-    border: 1px solid rgba(240,246,252,0.1) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
     font-family: 'JetBrains Mono', monospace !important;
     font-weight: 600 !important;
     text-transform: uppercase !important;
+    letter-spacing: 1px !important;
     border-radius: 6px !important;
-    transition: all 0.2s ease !important;
 }
 .stButton>button:hover {
-    background: #2EA043 !important;
-    box-shadow: 0 0 10px rgba(46, 160, 67, 0.4) !important;
-    transform: translateY(-1px);
+    background: #10B981 !important;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.4) !important;
+    transform: translateY(-2px);
 }
 
 /* --- INPUTS --- */
 .stTextInput>div>div>input {
-    background-color: #0D1117 !important;
-    color: #C9D1D9 !important;
-    border: 1px solid #30363D !important;
+    background-color: #111419 !important; /* Darker input for contrast against grey bg */
+    color: #FFFFFF !important;
+    border: 1px solid #4B5563 !important;
     border-radius: 6px !important;
     font-family: 'JetBrains Mono', monospace !important;
 }
 .stTextInput>div>div>input:focus {
-    border-color: #58A6FF !important; /* Blue focus like VS Code */
-    box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2) !important;
+    border-color: #10B981 !important;
+    box-shadow: 0 0 0 1px #10B981 !important;
 }
 
 /* --- TABS --- */
 .stTabs [data-baseweb="tab-list"] {
     background-color: transparent !important;
-    border-bottom: 1px solid #30363D !important;
+    border-bottom: 2px solid #363E4B !important;
     gap: 20px !important;
 }
 .stTabs [data-baseweb="tab"] {
-    color: #8B949E !important;
+    color: #9CA3AF !important;
     font-family: 'JetBrains Mono', monospace !important;
-    font-size: 0.85rem !important;
+    font-size: 0.9rem !important;
     border-bottom: 2px solid transparent !important;
 }
 .stTabs [aria-selected="true"] {
-    color: #58A6FF !important; /* Tactical Blue highlight */
-    border-bottom: 2px solid #58A6FF !important;
+    color: #10B981 !important;
+    border-bottom: 2px solid #10B981 !important;
 }
 
 /* --- CUSTOM CLASSES --- */
 .raptor-header {
     font-family: 'Orbitron', sans-serif;
     font-weight: 900;
-    font-size: 2.8rem;
-    background: -webkit-linear-gradient(#00FF41, #008F11);
+    font-size: 3.5rem;
+    background: -webkit-linear-gradient(#22C55E, #15803D); /* Green Gradient */
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    letter-spacing: 4px;
+    letter-spacing: 6px;
     margin: 0;
-    line-height: 1.2;
-    text-shadow: 0px 0px 30px rgba(0, 255, 65, 0.15);
+    line-height: 1.1;
+    text-shadow: 0px 4px 15px rgba(0, 0, 0, 0.3);
 }
 .raptor-subtitle {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.85rem;
-    color: #8B949E;
+    font-size: 0.9rem;
+    color: #9CA3AF;
     letter-spacing: 2px;
     text-transform: uppercase;
-    margin-top: 4px;
+    margin-top: 8px;
 }
 .raptor-version {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.65rem;
-    color: #2EA043;
+    font-size: 0.7rem;
+    color: #10B981;
     letter-spacing: 2px;
-    opacity: 0.8;
+    opacity: 0.9;
 }
 
 /* Status Indicators */
 .status-online {
-    background: #0D1117;
-    border: 1px solid #30363D;
+    background: #1B2028;
+    border: 1px solid #374151;
     border-radius: 6px;
     padding: 10px 14px;
     margin: 8px 0;
 }
 .status-dot {
     display: inline-block;
-    width: 8px;
-    height: 8px;
-    background: #2EA043;
+    width: 10px;
+    height: 10px;
+    background: #10B981;
     border-radius: 50%;
-    margin-right: 8px;
-    box-shadow: 0 0 5px #2EA043;
-    animation: pulse 3s infinite;
+    margin-right: 10px;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+    animation: pulse 2s infinite;
 }
-@keyframes pulse { 0% {opacity: 1;} 50% {opacity: 0.5;} 100% {opacity: 1;} }
+@keyframes pulse { 0% {opacity: 1;} 50% {opacity: 0.6;} 100% {opacity: 1;} }
 
 /* Card Styles */
 .target-card {
-    background-color: #161B22; /* Lighter than bg */
-    border: 1px solid #30363D;
+    background-color: #2A323E; /* Lighter card background */
+    border: 1px solid #3E4C5E;
     border-radius: 8px;
     padding: 20px;
     margin: 10px 0;
     transition: transform 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 .target-card:hover {
-    border-color: #58A6FF;
+    border-color: #10B981;
+    transform: translateY(-2px);
 }
 .intel-card {
-    background-color: #161B22;
-    border-left: 3px solid #30363D;
+    background-color: #2A323E;
+    border-left: 4px solid #3E4C5E;
     padding: 16px;
-    margin-bottom: 10px;
-    border-radius: 0 4px 4px 0;
+    margin-bottom: 12px;
+    border-radius: 0 6px 6px 0;
 }
 
-/* Typography */
+/* Typography & Layout */
 .section-header {
     font-family: 'Orbitron', sans-serif;
-    color: #E6EDF3;
-    font-size: 1.1rem;
+    color: #F3F4F6;
+    font-size: 1.2rem;
     letter-spacing: 1px;
     text-transform: uppercase;
-    border-bottom: 1px solid #30363D;
+    border-bottom: 2px solid #374151;
     padding-bottom: 8px;
-    margin-bottom: 16px;
-    margin-top: 24px;
+    margin-bottom: 20px;
+    margin-top: 30px;
     display: flex;
     align-items: center;
 }
 .section-header::before {
     content: '';
     display: inline-block;
-    width: 6px;
-    height: 6px;
-    background-color: #00FF41;
-    margin-right: 10px;
+    width: 8px;
+    height: 8px;
+    background-color: #10B981;
+    margin-right: 12px;
     transform: rotate(45deg);
 }
 
-.mono-text { font-family: 'JetBrains Mono', monospace; color: #8B949E; font-size: 0.85rem; }
-.kill-metric { font-family: 'Orbitron', sans-serif; font-size: 1.8rem; color: #FFF; font-weight: 700; }
+.mono-text { font-family: 'JetBrains Mono', monospace; color: #9CA3AF; font-size: 0.85rem; }
+.kill-metric { font-family: 'Orbitron', sans-serif; font-size: 2.0rem; color: #FFF; font-weight: 700; }
 
-/* Dividers & Misc */
+/* Dividers */
 .neon-divider {
     height: 1px;
-    background: linear-gradient(90deg, transparent, #30363D, transparent);
-    margin: 25px 0;
+    background: linear-gradient(90deg, transparent, #4B5563, transparent);
+    margin: 30px 0;
 }
 
 /* Tier Badges */
-.tier-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.75em; letter-spacing: 1px; text-transform: uppercase; }
-.tier-diamante { background: rgba(56, 139, 253, 0.15); color: #58A6FF; border: 1px solid rgba(56, 139, 253, 0.4); }
-.tier-ouro { background: rgba(210, 153, 34, 0.15); color: #D29922; border: 1px solid rgba(210, 153, 34, 0.4); }
-.tier-prata { background: rgba(139, 148, 158, 0.15); color: #8B949E; border: 1px solid rgba(139, 148, 158, 0.4); }
-.tier-bronze { background: rgba(210, 105, 30, 0.15); color: #D2691E; border: 1px solid rgba(210, 105, 30, 0.4); }
+.tier-badge { display: inline-block; padding: 6px 14px; border-radius: 20px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.8em; letter-spacing: 1px; text-transform: uppercase; }
+.tier-diamante { background: rgba(59, 130, 246, 0.2); color: #60A5FA; border: 1px solid #3B82F6; }
+.tier-ouro { background: rgba(234, 179, 8, 0.2); color: #FACC15; border: 1px solid #EAB308; }
+.tier-prata { background: rgba(156, 163, 175, 0.2); color: #D1D5DB; border: 1px solid #9CA3AF; }
+.tier-bronze { background: rgba(217, 119, 6, 0.2); color: #FB923C; border: 1px solid #D97706; }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: #0E1117; }
-::-webkit-scrollbar-thumb { background: #30363D; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #58A6FF; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #1B2028; }
+::-webkit-scrollbar-thumb { background: #4B5563; border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: #6B7280; }
 
 </style>""", unsafe_allow_html=True)
 
@@ -342,8 +346,8 @@ for k in ['dossie','logs','historico','step_results']:
 with st.sidebar:
     st.markdown("""
     <div style="text-align:center;padding:20px 0 10px 0;">
-        <div style="font-size:2.5rem;margin-bottom:4px;">🦅</div>
-        <div class="raptor-header" style="font-size:1.8rem;">RAPTOR</div>
+        <div style="font-size:3rem;margin-bottom:10px;">🦖</div>
+        <div class="raptor-header" style="font-size:2rem;">RAPTOR</div>
         <div class="raptor-version">v1.0 | INTELLIGENCE SYSTEM</div>
     </div>""", unsafe_allow_html=True)
 
@@ -351,22 +355,22 @@ with st.sidebar:
     <div class="status-online">
         <span class="status-dot"></span>
         <span style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:#E6EDF3;letter-spacing:1px;">SISTEMA ONLINE</span>
-        <span style="float:right;font-family:'JetBrains Mono',monospace;font-size:.65rem;color:#8B949E;">OPERACIONAL</span>
+        <span style="float:right;font-family:'JetBrains Mono',monospace;font-size:.65rem;color:#9CA3AF;">OPERACIONAL</span>
     </div>""", unsafe_allow_html=True)
 
     st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
 
     try:
         api_key = st.secrets["GEMINI_API_KEY"]
-        st.markdown('<div style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;color:#2EA043;">✅ API KEY: AUTENTICADO</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;color:#10B981;">✅ API KEY: AUTENTICADO</div>', unsafe_allow_html=True)
     except (FileNotFoundError, KeyError):
         api_key = st.text_input("🔑 API KEY", type="password", placeholder="Insira a chave Gemini...")
         if not api_key:
-            st.markdown('<div style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;color:#FF4B4B;">⛔ ACESSO NEGADO</div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;color:#EF4444;">⛔ ACESSO NEGADO</div>', unsafe_allow_html=True)
             st.stop()
 
     st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-family:\'JetBrains Mono\',monospace;font-size:.7rem;color:#8B949E;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">🎯 DESIGNAÇÃO DO ALVO</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-family:\'JetBrains Mono\',monospace;font-size:.7rem;color:#9CA3AF;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">🎯 DESIGNAÇÃO DO ALVO</div>', unsafe_allow_html=True)
     
     target = st.text_input("Empresa / Grupo", placeholder="Ex: SLC Agricola, Amaggi...", label_visibility="collapsed")
     target_cnpj = st.text_input("CNPJ (opcional)", placeholder="XX.XXX.XXX/XXXX-XX", label_visibility="collapsed")
@@ -374,21 +378,21 @@ with st.sidebar:
     if target_cnpj:
         cl = limpar_cnpj(target_cnpj)
         if cl and validar_cnpj(cl):
-            st.markdown(f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;color:#2EA043;margin-top:4px;">✅ VALIDADO: {formatar_cnpj(cl)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;color:#10B981;margin-top:4px;">✅ VALIDADO: {formatar_cnpj(cl)}</div>', unsafe_allow_html=True)
         elif cl:
-            st.markdown('<div style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;color:#FF4B4B;margin-top:4px;">⛔ CNPJ INVALIDO</div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;color:#EF4444;margin-top:4px;">⛔ CNPJ INVALIDO</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
     btn = st.button("⚡ INICIAR CAÇA", type="primary", disabled=not target, use_container_width=True)
 
     if st.session_state.historico:
         st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-family:\'JetBrains Mono\',monospace;font-size:.7rem;color:#8B949E;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">📋 ALVOS RECENTES</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-family:\'JetBrains Mono\',monospace;font-size:.7rem;color:#9CA3AF;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">📋 ALVOS RECENTES</div>', unsafe_allow_html=True)
         for h in reversed(st.session_state.historico[-8:]):
-            tc = "#2EA043" if h['score']>=751 else "#D29922" if h['score']>=501 else "#8B949E"
-            st.markdown(f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;padding:4px 0;border-bottom:1px solid #30363D;"><span style="color:{tc};">●</span> <span style="color:#C9D1D9;">{h["empresa"][:20]}</span><span style="color:{tc};float:right;">{h["score"]}</span></div>', unsafe_allow_html=True)
+            tc = "#10B981" if h['score']>=751 else "#F59E0B" if h['score']>=501 else "#9CA3AF"
+            st.markdown(f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;padding:6px 0;border-bottom:1px solid #374151;"><span style="color:{tc};">●</span> <span style="color:#E5E7EB;">{h["empresa"][:20]}</span><span style="color:{tc};float:right;">{h["score"]}</span></div>', unsafe_allow_html=True)
 
-    st.markdown('<div style="position:fixed;bottom:10px;font-family:\'JetBrains Mono\',monospace;font-size:.6rem;color:#484F58;letter-spacing:1px;">RAPTOR © 2026 | CLASSIFIED</div>', unsafe_allow_html=True)
+    st.markdown('<div style="position:fixed;bottom:10px;font-family:\'JetBrains Mono\',monospace;font-size:.6rem;color:#6B7280;letter-spacing:1px;">RAPTOR © 2026 | CLASSIFIED</div>', unsafe_allow_html=True)
 
 # ==============================================================================
 # 5. TABS PRINCIPAIS
@@ -403,8 +407,7 @@ with tab_scout:
     # -------------------------------------------------------------------------
     if not target and not st.session_state.dossie:
         st.markdown("""
-        <div style="text-align:center;padding:40px 0 20px 0;">
-            <div style="font-size:4rem;margin-bottom:10px;">🦖</div>
+        <div style="text-align:center;padding:50px 0 30px 0;">
             <div class="raptor-header">R.A.P.T.O.R.</div>
             <div class="raptor-subtitle">
                 <b>R</b>astreamento <b>A</b>utomatizado de <b>P</b>otencial <b>T</b>op-tier e <b>O</b>portunidades <b>R</b>eais<br>
@@ -430,7 +433,7 @@ with tab_scout:
 
         st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
         
-        # Grid de Funcionalidades
+        # Grid de Funcionalidades (Agora com Cards Mais Claros)
         c1,c2,c3,c4 = st.columns(4)
         for col,icon,title,desc in [
             (c1,"🛰️","RECON","Hectares, culturas, verticalização"),
@@ -442,8 +445,8 @@ with tab_scout:
                 st.markdown(f"""
                 <div class="target-card" style="text-align:center;min-height:160px;">
                     <div style="font-size:2rem;margin-bottom:10px;">{icon}</div>
-                    <div style="font-family:'Orbitron',sans-serif;color:#E6EDF3;font-size:0.85rem;letter-spacing:1px;margin-bottom:8px;font-weight:700;">{title}</div>
-                    <div style="font-family:'JetBrains Mono',monospace;color:#8B949E;font-size:0.75rem;">{desc}</div>
+                    <div style="font-family:'Orbitron',sans-serif;color:#E6EDF3;font-size:0.9rem;letter-spacing:1px;margin-bottom:8px;font-weight:700;">{title}</div>
+                    <div style="font-family:'JetBrains Mono',monospace;color:#9CA3AF;font-size:0.75rem;">{desc}</div>
                 </div>""", unsafe_allow_html=True)
 
     # -------------------------------------------------------------------------
@@ -451,25 +454,25 @@ with tab_scout:
     # -------------------------------------------------------------------------
     if btn and target:
         st.session_state.dossie = None; st.session_state.logs = []; st.session_state.step_results = []
-        st.markdown(f'<div style="padding:10px 0;"><div style="font-family:\'Orbitron\',sans-serif;color:#2EA043;font-size:1.2rem;letter-spacing:3px;text-transform:uppercase;">🎯 ALVO ADQUIRIDO: {target.upper()}</div><div class="mono-text" style="margin-top:4px;">Iniciando varredura completa...</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="padding:10px 0;"><div style="font-family:\'Orbitron\',sans-serif;color:#10B981;font-size:1.4rem;letter-spacing:2px;text-transform:uppercase;">🎯 ALVO ADQUIRIDO: {target.upper()}</div><div class="mono-text" style="margin-top:4px;">Iniciando varredura completa...</div></div>', unsafe_allow_html=True)
         progress_bar = st.progress(0.0); status = st.empty(); step_ctn = st.container()
         
         def on_progress(p, m):
             progress_bar.progress(min(p, 1.0))
-            status.markdown(f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:.85rem;"><span style="color:#2EA043;">▶</span> <span style="color:#C9D1D9;">{m}</span> <span style="color:#8B949E;">— {random.choice(FRASES)}</span></div>', unsafe_allow_html=True)
+            status.markdown(f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:.85rem;"><span style="color:#10B981;">▶</span> <span style="color:#E5E7EB;">{m}</span> <span style="color:#9CA3AF;">— {random.choice(FRASES)}</span></div>', unsafe_allow_html=True)
         
         def on_step(s):
             st.session_state.step_results.append(s)
             ic = {"success":"✅","warning":"⚠️","error":"❌"}.get(s.status,"⏳")
             with step_ctn:
-                border_color = "#2EA043" if s.status == "success" else "#D29922" if s.status == "warning" else "#F85149"
-                bg_color = "#0D1117"
-                h = f'<div style="background:{bg_color};border-left:3px solid {border_color};padding:12px;margin-bottom:8px;border-radius:0 4px 4px 0;">'
+                border_color = "#10B981" if s.status == "success" else "#F59E0B" if s.status == "warning" else "#EF4444"
+                bg_color = "#212630"
+                h = f'<div style="background:{bg_color};border-left:4px solid {border_color};padding:14px;margin-bottom:10px;border-radius:0 4px 4px 0;">'
                 h += f'<b style="color:#E6EDF3;">{ic} {s.step_number}. {s.step_name}</b>'
-                h += f' <span style="float:right;color:#8B949E;font-family:\'JetBrains Mono\',monospace;">{s.tempo_segundos:.1f}s</span><br>'
-                h += f'<span style="color:#8B949E;font-size:0.9rem;">{s.resumo}</span>'
+                h += f' <span style="float:right;color:#9CA3AF;font-family:\'JetBrains Mono\',monospace;">{s.tempo_segundos:.1f}s</span><br>'
+                h += f'<span style="color:#9CA3AF;font-size:0.9rem;">{s.resumo}</span>'
                 if s.confianca > 0:
-                    cc = "#2EA043" if s.confianca >= 0.7 else "#D29922" if s.confianca >= 0.4 else "#F85149"
+                    cc = "#10B981" if s.confianca >= 0.7 else "#F59E0B" if s.confianca >= 0.4 else "#EF4444"
                     h += f' | <span style="color:{cc};font-size:0.8rem;">Conf: {s.confianca:.0%}</span>'
                 h += '</div>'
                 st.markdown(h, unsafe_allow_html=True)
@@ -479,7 +482,7 @@ with tab_scout:
             st.session_state.historico.append({'empresa': dossie.dados_operacionais.nome_grupo or target, 'score': dossie.sas_result.score, 'tier': dossie.sas_result.tier.value})
             st.rerun()
         except Exception as e:
-            st.markdown(f'<div style="background:rgba(248, 81, 73, 0.1);border:1px solid rgba(248, 81, 73, 0.4);border-radius:6px;padding:16px;font-family:\'JetBrains Mono\',monospace;"><span style="color:#F85149;font-weight:700;">⛔ FALHA NA OPERAÇÃO</span><br><span style="color:#C9D1D9;font-size:.85rem;">{e}</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background:rgba(239, 68, 68, 0.1);border:1px solid rgba(239, 68, 68, 0.4);border-radius:6px;padding:16px;font-family:\'JetBrains Mono\',monospace;"><span style="color:#EF4444;font-weight:700;">⛔ FALHA NA OPERAÇÃO</span><br><span style="color:#E5E7EB;font-size:.85rem;">{e}</span></div>', unsafe_allow_html=True)
             import traceback; st.code(traceback.format_exc())
 
     # -------------------------------------------------------------------------
@@ -503,19 +506,19 @@ with tab_scout:
             tier_cls = TIER_MAP.get(d.sas_result.tier.value, "bronze")
             st.markdown(f"""
             <div class="target-card" style="text-align:center;">
-                <div style="font-family:'JetBrains Mono',monospace;color:#8B949E;font-size:.7rem;letter-spacing:2px;text-transform:uppercase;">SCORE SAS</div>
+                <div style="font-family:'JetBrains Mono',monospace;color:#9CA3AF;font-size:.7rem;letter-spacing:2px;text-transform:uppercase;">SCORE SAS</div>
                 <div class="kill-metric">{d.sas_result.score}</div>
-                <div style="font-family:'JetBrains Mono',monospace;color:#8B949E;font-size:.75rem;">/1000</div>
+                <div style="font-family:'JetBrains Mono',monospace;color:#9CA3AF;font-size:.75rem;">/1000</div>
                 <div class="tier-badge tier-{tier_cls}" style="margin-top:8px;">{d.sas_result.tier.value}</div>
             </div>""", unsafe_allow_html=True)
             if d.sas_result.recomendacao_comercial:
-                st.markdown(f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;color:#2EA043;text-align:center;margin-top:8px;">🎯 {d.sas_result.recomendacao_comercial}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:.75rem;color:#10B981;text-align:center;margin-top:8px;">🎯 {d.sas_result.recomendacao_comercial}</div>', unsafe_allow_html=True)
         
         with ci:
-            st.markdown(f'<div style="padding:10px 0;"><div style="font-family:\'Orbitron\',sans-serif;color:#E6EDF3;font-size:1.6rem;letter-spacing:1px;font-weight:700;">{nome.upper()}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="padding:10px 0;"><div style="font-family:\'Orbitron\',sans-serif;color:#E6EDF3;font-size:1.8rem;letter-spacing:1px;font-weight:700;">{nome.upper()}</div></div>', unsafe_allow_html=True)
             badges = op.verticalizacao.listar_ativos()
             if badges:
-                bh = " ".join([f'<span style="background:rgba(46, 160, 67, 0.15);color:#2EA043;padding:2px 8px;border-radius:4px;font-family:\'Inter\',sans-serif;font-size:.75rem;margin-right:4px;border:1px solid rgba(46, 160, 67, 0.3);font-weight:600;">{b}</span>' for b in badges[:10]])
+                bh = " ".join([f'<span style="background:rgba(16, 185, 129, 0.1);color:#10B981;padding:4px 10px;border-radius:6px;font-family:\'Inter\',sans-serif;font-size:.75rem;margin-right:6px;border:1px solid rgba(16, 185, 129, 0.3);font-weight:600;">{b}</span>' for b in badges[:10]])
                 st.markdown(bh, unsafe_allow_html=True)
             st.markdown(f'<div class="mono-text" style="margin-top:12px;">⏱️ {d.tempo_total_segundos:.0f}s | 📅 {d.timestamp_geracao}</div>', unsafe_allow_html=True)
         
@@ -525,7 +528,7 @@ with tab_scout:
                 qc = lc.get(d.quality_report.nivel.value, '')
                 st.markdown(f"""
                 <div class="target-card" style="text-align:center;">
-                    <div style="font-family:'JetBrains Mono',monospace;color:#8B949E;font-size:.7rem;letter-spacing:2px;text-transform:uppercase;">QUALITY GATE</div>
+                    <div style="font-family:'JetBrains Mono',monospace;color:#9CA3AF;font-size:.7rem;letter-spacing:2px;text-transform:uppercase;">QUALITY GATE</div>
                     <div class="kill-metric" style="font-size:1.4rem;">{d.quality_report.score_qualidade:.0f}%</div>
                     <div style="font-family:'JetBrains Mono',monospace;color:#E6EDF3;font-size:.8rem;margin-top:4px;">{qc} {d.quality_report.nivel.value}</div>
                 </div>""", unsafe_allow_html=True)
@@ -544,7 +547,7 @@ with tab_scout:
             if op.culturas: txt += f" atuando em **{_sj(op.culturas)}**"
             if op.regioes_atuacao: txt += f" nas regiões **{_sj(op.regioes_atuacao)}**."
             
-            st.markdown(f"<div style='font-size:1.05rem;line-height:1.6;'>{txt}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:1.1rem;line-height:1.6;color:#E6EDF3;'>{txt}</div>", unsafe_allow_html=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
             if badges: st.markdown(f"**🏗️ Infraestrutura:** {', '.join(badges)}")
@@ -558,16 +561,16 @@ with tab_scout:
             if d.dados_cnpj:
                 dc = d.dados_cnpj
                 st.markdown(f"""
-                <div style="background:#0D1117;border:1px solid #30363D;border-radius:6px;padding:15px;">
-                    <div style="font-size:0.8rem;color:#8B949E;margin-bottom:4px;">CNPJ</div>
+                <div style="background:#212630;border:1px solid #374151;border-radius:6px;padding:15px;">
+                    <div style="font-size:0.8rem;color:#9CA3AF;margin-bottom:4px;">CNPJ</div>
                     <div style="font-family:'JetBrains Mono';font-size:0.9rem;color:#E6EDF3;margin-bottom:10px;">{formatar_cnpj(dc.cnpj)}</div>
-                    <div style="font-size:0.8rem;color:#8B949E;margin-bottom:4px;">CNAE</div>
+                    <div style="font-size:0.8rem;color:#9CA3AF;margin-bottom:4px;">CNAE</div>
                     <div style="font-size:0.9rem;color:#E6EDF3;margin-bottom:10px;">{dc.cnae_principal}</div>
-                    <div style="font-size:0.8rem;color:#8B949E;margin-bottom:4px;">CAPITAL SOCIAL</div>
+                    <div style="font-size:0.8rem;color:#9CA3AF;margin-bottom:4px;">CAPITAL SOCIAL</div>
                     <div style="font-size:0.9rem;color:#E6EDF3;margin-bottom:10px;">R${dc.capital_social:,.0f}</div>
-                    <div style="font-size:0.8rem;color:#8B949E;margin-bottom:4px;">LOCALIZAÇÃO</div>
+                    <div style="font-size:0.8rem;color:#9CA3AF;margin-bottom:4px;">LOCALIZAÇÃO</div>
                     <div style="font-size:0.9rem;color:#E6EDF3;margin-bottom:10px;">{dc.municipio}/{dc.uf}</div>
-                    <div style="font-size:0.8rem;color:#8B949E;margin-bottom:4px;">QSA</div>
+                    <div style="font-size:0.8rem;color:#9CA3AF;margin-bottom:4px;">QSA</div>
                     <div style="font-size:0.9rem;color:#E6EDF3;">{len(dc.qsa)} sócios encontrados</div>
                 </div>""", unsafe_allow_html=True)
 
@@ -614,17 +617,17 @@ with tab_scout:
                 
                 with st.container():
                     st.markdown(f"""
-                    <div style="background:#161B22;padding:15px;border-radius:6px;margin-bottom:10px;border-left:4px solid {'#F85149' if rel=='alta' else '#D29922'};">
+                    <div style="background:#212630;padding:15px;border-radius:6px;margin-bottom:10px;border-left:4px solid {'#EF4444' if rel=='alta' else '#F59E0B'};">
                         <div style="display:flex;justify-content:space-between;">
                             <div style="font-weight:700;font-size:1.05rem;color:#E6EDF3;">{dec.get('nome','')}</div>
-                            <div style="font-family:'JetBrains Mono';font-size:0.75rem;color:#8B949E;text-transform:uppercase;">{rel} RELEVANCE</div>
+                            <div style="font-family:'JetBrains Mono';font-size:0.75rem;color:#9CA3AF;text-transform:uppercase;">{rel} RELEVANCE</div>
                         </div>
-                        <div style="color:#2EA043;font-size:0.9rem;margin-bottom:5px;">{dec.get('cargo','')}</div>
-                        <div style="font-size:0.85rem;color:#C9D1D9;">
+                        <div style="color:#10B981;font-size:0.9rem;margin-bottom:5px;">{dec.get('cargo','')}</div>
+                        <div style="font-size:0.85rem;color:#D1D5DB;">
                             {'🎓 ' + dec['formacao'] if dec.get('formacao') else ''} 
                             {' | ⏱️ ' + dec['tempo_cargo'] if dec.get('tempo_cargo') else ''}
                         </div>
-                        {f'<div style="margin-top:5px;"><a href="{dec["linkedin"]}" target="_blank" style="text-decoration:none;color:#58A6FF;font-size:0.8rem;">🔗 LinkedIn Profile</a></div>' if dec.get('linkedin') else ''}
+                        {f'<div style="margin-top:5px;"><a href="{dec["linkedin"]}" target="_blank" style="text-decoration:none;color:#60A5FA;font-size:0.8rem;">🔗 LinkedIn Profile</a></div>' if dec.get('linkedin') else ''}
                     </div>
                     """, unsafe_allow_html=True)
             
@@ -639,11 +642,11 @@ with tab_scout:
             with ct1:
                 st.markdown(f"""
                 <div class="target-card">
-                    <div style="font-size:0.8rem;color:#8B949E;text-transform:uppercase;">ERP PRINCIPAL</div>
-                    <div style="font-size:1.4rem;font-weight:700;color:#58A6FF;margin-bottom:4px;">{erp.get('sistema', 'Não Identificado')}</div>
-                    <div style="font-size:0.9rem;color:#C9D1D9;">{erp.get('versao','')}</div>
-                    <hr style="border-color:#30363D;margin:10px 0;">
-                    <div style="font-size:0.8rem;color:#8B949E;">Fonte: {erp.get('fonte_evidencia','N/A')}</div>
+                    <div style="font-size:0.8rem;color:#9CA3AF;text-transform:uppercase;">ERP PRINCIPAL</div>
+                    <div style="font-size:1.4rem;font-weight:700;color:#60A5FA;margin-bottom:4px;">{erp.get('sistema', 'Não Identificado')}</div>
+                    <div style="font-size:0.9rem;color:#D1D5DB;">{erp.get('versao','')}</div>
+                    <hr style="border-color:#374151;margin:10px 0;">
+                    <div style="font-size:0.8rem;color:#9CA3AF;">Fonte: {erp.get('fonte_evidencia','N/A')}</div>
                 </div>
                 """, unsafe_allow_html=True)
             with ct2:
@@ -686,28 +689,28 @@ with tab_scout:
             pcts = [v/m*100 for v,m in zip(vals, maxs)]
             
             fig = go.Figure(go.Scatterpolar(r=pcts+[pcts[0]], theta=cats+[cats[0]], fill='toself',
-                line_color='#2EA043', fillcolor='rgba(46, 160, 67, 0.2)', marker=dict(color='#2EA043', size=8)))
-            fig.update_layout(polar=dict(bgcolor='#0E1117',
-                radialaxis=dict(visible=True, range=[0,100], ticksuffix="%", gridcolor='#30363D', linecolor='#30363D', tickfont=dict(color='#8B949E', family='JetBrains Mono')),
-                angularaxis=dict(gridcolor='#30363D', linecolor='#30363D', tickfont=dict(color='#E6EDF3', family='Inter', size=11, weight=700))),
+                line_color='#10B981', fillcolor='rgba(16, 185, 129, 0.2)', marker=dict(color='#10B981', size=8)))
+            fig.update_layout(polar=dict(bgcolor='#1B2028',
+                radialaxis=dict(visible=True, range=[0,100], ticksuffix="%", gridcolor='#374151', linecolor='#374151', tickfont=dict(color='#9CA3AF', family='JetBrains Mono')),
+                angularaxis=dict(gridcolor='#374151', linecolor='#374151', tickfont=dict(color='#E6EDF3', family='Inter', size=11, weight=700))),
                 showlegend=False, height=350, margin=dict(l=60,r=60,t=20,b=20),
-                paper_bgcolor='#0E1117', plot_bgcolor='#0E1117', font=dict(family='Inter', color='#C9D1D9'))
+                paper_bgcolor='#1B2028', plot_bgcolor='#1B2028', font=dict(family='Inter', color='#D1D5DB'))
             st.plotly_chart(fig, use_container_width=True)
         
         with ctb:
             st.markdown(f"""
-            <div style="background:#161B22;padding:15px;border-radius:6px;border:1px solid #30363D;">
-                <div style="display:flex;justify-content:space-between;border-bottom:1px solid #30363D;padding-bottom:5px;margin-bottom:5px;">
-                    <span style="color:#8B949E;">MÚSCULO</span><span style="color:#FFF;">{b.musculo}/400</span>
+            <div style="background:#212630;padding:15px;border-radius:6px;border:1px solid #374151;">
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid #374151;padding-bottom:5px;margin-bottom:5px;">
+                    <span style="color:#9CA3AF;">MÚSCULO</span><span style="color:#FFF;">{b.musculo}/400</span>
                 </div>
-                <div style="display:flex;justify-content:space-between;border-bottom:1px solid #30363D;padding-bottom:5px;margin-bottom:5px;">
-                    <span style="color:#8B949E;">COMPLEX.</span><span style="color:#FFF;">{b.complexidade}/250</span>
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid #374151;padding-bottom:5px;margin-bottom:5px;">
+                    <span style="color:#9CA3AF;">COMPLEX.</span><span style="color:#FFF;">{b.complexidade}/250</span>
                 </div>
-                <div style="display:flex;justify-content:space-between;border-bottom:1px solid #30363D;padding-bottom:5px;margin-bottom:5px;">
-                    <span style="color:#8B949E;">GENTE</span><span style="color:#FFF;">{b.gente}/200</span>
+                <div style="display:flex;justify-content:space-between;border-bottom:1px solid #374151;padding-bottom:5px;margin-bottom:5px;">
+                    <span style="color:#9CA3AF;">GENTE</span><span style="color:#FFF;">{b.gente}/200</span>
                 </div>
                 <div style="display:flex;justify-content:space-between;">
-                    <span style="color:#8B949E;">MOMENTO</span><span style="color:#FFF;">{b.momento}/150</span>
+                    <span style="color:#9CA3AF;">MOMENTO</span><span style="color:#FFF;">{b.momento}/150</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -758,12 +761,12 @@ with tab_compare:
         hist = st.session_state.historico[-5:]
         st.dataframe(pd.DataFrame(hist), hide_index=True, use_container_width=True)
         
-        colors = ['#2EA043' if h['score']>=751 else '#D29922' if h['score']>=501 else '#8B949E' for h in hist]
+        colors = ['#10B981' if h['score']>=751 else '#F59E0B' if h['score']>=501 else '#9CA3AF' for h in hist]
         fig = go.Figure(go.Bar(x=[h['empresa'] for h in hist], y=[h['score'] for h in hist],
             marker_color=colors, text=[h['tier'] for h in hist], textposition='auto'))
         
-        fig.update_layout(title="RANKING DE OPORTUNIDADES", paper_bgcolor='#0E1117', plot_bgcolor='#0E1117',
-            font=dict(family='Inter', color='#C9D1D9'), yaxis=dict(gridcolor='#30363D'), xaxis=dict(gridcolor='#30363D'))
+        fig.update_layout(title="RANKING DE OPORTUNIDADES", paper_bgcolor='#1B2028', plot_bgcolor='#1B2028',
+            font=dict(family='Inter', color='#D1D5DB'), yaxis=dict(gridcolor='#374151'), xaxis=dict(gridcolor='#374151'))
         st.plotly_chart(fig, use_container_width=True)
 
 # ==============================================================================
@@ -779,10 +782,10 @@ with tab_arsenal:
             info = ARGUMENTOS_CONCORRENCIA[conc]
             c1,c2 = st.columns(2)
             with c1:
-                st.markdown('<div class="section-header" style="font-size:.9rem;color:#F85149;">❌ PONTOS FRACOS</div>', unsafe_allow_html=True)
+                st.markdown('<div class="section-header" style="font-size:.9rem;color:#EF4444;">❌ PONTOS FRACOS</div>', unsafe_allow_html=True)
                 for f in info['fraquezas']: st.markdown(f"- {f}")
             with c2:
-                st.markdown('<div class="section-header" style="font-size:.9rem;color:#2EA043;">✅ VANTAGEM SENIOR</div>', unsafe_allow_html=True)
+                st.markdown('<div class="section-header" style="font-size:.9rem;color:#10B981;">✅ VANTAGEM SENIOR</div>', unsafe_allow_html=True)
                 for v in info['senior_vantagem']: st.markdown(f"- {v}")
 
     with tab_prof:
