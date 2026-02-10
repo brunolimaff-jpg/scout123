@@ -1,303 +1,297 @@
+"""
+services/financial_layer.py — VERSÃO ULTRA-AGRESSIVA
+Garante busca profunda de dados financeiros e jurídicos
+"""
 import requests
 import json
 import logging
 from typing import Dict, List
 from datetime import datetime
+import re
 
 logger = logging.getLogger(__name__)
 
 class FinancialLayer:
     """
-    Camada de inteligência financeira:
-    - CRAs e Debêntures (CVM/B3)
-    - Incentivos fiscais (SUDAM/SUDENE)
-    - Multas ambientais (Ibama/SEMA)
-    - Processos trabalhistas (TRT/Jusbrasil)
+    Camada financeira com prompts ultra-agressivos.
     """
     
     def __init__(self, gemini_service):
         self.gemini = gemini_service
     
-    # ======== CRA / DEBÊNTURES ========
+    # ======== CRA / DEBÊNTURES (ULTRA-AGRESSIVO) ========
     async def mineracao_cra_debentures(self, razao_social: str, cnpj: str) -> Dict:
         """
-        Busca prospectos de CRA (Certificados de Recebíveis do Agronegócio) na CVM e B3.
-        Esses documentos OBRIGAM auditoria e revelam faturamento real, EBITDA, alavancagem.
+        Busca CRAs/Debêntures com 3 tentativas progressivas.
         """
-        logger.info(f"[CRA] Mineração: {razao_social}")
+        logger.info(f"[CRA] Mineração ultra-agressiva: {razao_social}")
         
-        prompt = f"""Você é especialista em mercado de capitais agrícola.
+        prompt = f"""BUSCA OBRIGATÓRIA: DADOS FINANCEIROS AUDITADOS
 
-ALVO: {razao_social} ({cnpj})
+EMPRESA: {razao_social} (CNPJ: {cnpj})
 
-BUSQUE ESPECIFICAMENTE:
-1. Prospectos de CRA (Certificado de Recebível do Agronegócio) na CVM
-2. Debêntures agrícolas na B3
-3. Relatórios de oferta pública
-4. Notas explicativas de balanços auditados
+VOCÊ **DEVE** PROCURAR EM:
+1. Site da CVM (Comissão de Valores Mobiliários)
+2. Site da B3 (Brasil, Bolsa, Balcão)
+3. Notícias sobre emissão de CRA/Debêntures
+4. Relatórios de sustentabilidade (PDF)
+5. Apresentações para investidores
 
-ESTAS EMISSÕES OBRIGAM:
-- Auditoria externa (Big 4 ou auditora registrada)
-- Publicação de balanço consolidado
-- Demonstração de EBITDA ajustado
-- Índices de alavancagem (Dívida/EBITDA)
-- Fluxo de caixa real
+DADOS OBRIGATÓRIOS A BUSCAR:
+- Faturamento/Receita Líquida anual
+- EBITDA (se mencionado)
+- Valor de CRAs emitidos
+- Índice de alavancagem (Dívida/EBITDA)
+- Nome do auditor (Deloitte, PWC, KPMG, EY)
 
-BUSQUE ESPECIFICAMENTE:
-- Receita Operacional Líquida (ROL)
-- EBITDA ou LAJIDA
-- Dívida Total
-- Taxa média ponderada de juros (TMPU)
-- Datas de emissão e vencimento
-- Avalistas ou garantidores
+EXEMPLO (Grupo Scheffer):
+- Faturamento: R$ 1,7 bilhão/ano
+- Emitiu CRA em 2016 (primeiro produtor MT)
+- Balanço auditado
 
 RETORNE JSON:
 {{
     "emissoes_cra": [
         {{
-            "serie": "CRA Série A 2023",
-            "valor_emissao": "R$ 500 milhões",
-            "data_emissao": "2023-06-15",
-            "data_vencimento": "2028-06-15",
-            "taxa_juros": "IPCA + 3.5% a.a.",
-            "rol_auditada": "R$ 2.3 bilhões",
-            "ebitda_ajustado": "R$ 850 milhões",
-            "divida_total": "R$ 1.2 bilhão",
-            "alavancagem": 1.41,
-            "auditor": "Deloitte"
+            "ano": 0,
+            "valor_emissao": "R$ 0",
+            "observacao": ""
         }}
     ],
-    "emissoes_debentures": [],
-    "faturamento_real": "R$ 2.3 bilhões",
-    "ebitda_consolidado": "R$ 850 milhões",
-    "margem_ebitda": "37%",
-    "indice_dps": 1.41,
-    "capacidade_investimento": "R$ 300-400 milhões/ano",
-    "observacoes": "Empresa com acesso a mercado de capitais, financiamento estruturado, fluxo de caixa robusto."
-}}"""
-        
+    "faturamento_real": "R$ 0 ou N/D",
+    "ebitda_consolidado": "R$ 0 ou N/D",
+    "indice_dps": "0x ou N/D",
+    "auditor": "Nome ou N/D",
+    "fonte": "URL ou N/D"
+}}
+
+SE NÃO ENCONTRAR, retorne "N/D" mas BUSQUE MUITO antes disso."""
+
         try:
-            response = await self.gemini.call_with_retry(prompt, max_retries=3)
+            response = await self.gemini.call_with_retry(
+                prompt,
+                max_retries=3,
+                use_search=True,
+                temperature=0.0
+            )
+            
             data = self._parse_json_response(response)
-            logger.info(f"[CRA] ✅ Faturamento real: {data.get('faturamento_real', 'N/D')}")
+            
+            faturamento = data.get('faturamento_real', 'N/D')
+            logger.info(f"[CRA] ✅ Faturamento encontrado: {faturamento}")
+            
             return data
+            
         except Exception as e:
             logger.error(f"[CRA] ❌ Erro: {e}")
-            return {"emissoes_cra": [], "faturamento_real": "N/D", "status": "erro"}
+            return {
+                "emissoes_cra": [],
+                "faturamento_real": "N/D",
+                "ebitda_consolidado": "N/D",
+                "status": "erro"
+            }
     
-    # ======== INCENTIVOS FISCAIS ========
+    # ======== INCENTIVOS FISCAIS (ULTRA-AGRESSIVO) ========
     async def rastreio_incentivos_fiscais(self, cnpj: str, estados_operacao: List[str]) -> Dict:
         """
-        Verifica SUDAM, SUDENE, PADIS, etc.
-        Indica fluxo de caixa livre e áreas de expansão no Matopiba.
+        Busca incentivos SUDAM/SUDENE/outros.
         """
+        if not estados_operacao:
+            return {"beneficios_ativos": [], "status": "sem_estados"}
+        
         logger.info(f"[INCENTIVOS] Verificando {', '.join(estados_operacao)}")
         
         estados_str = ", ".join(estados_operacao)
         
-        prompt = f"""Você é especialista em incentivos fiscais agrícolas brasileiros.
+        prompt = f"""BUSCA: INCENTIVOS FISCAIS AGRÍCOLAS
 
-CNPJ: {cnpj}
 ESTADOS DE OPERAÇÃO: {estados_str}
 
-BUSQUE BENEFÍCIOS FISCAIS ATIVOS:
-1. SUDAM (Superintendência do Desenvolvimento da Amazônia)
-   - Isenção de IRPJ/CSLL
-   - Redução de IPI
-   - Estados: AM, RO, AC, AP, PA, TO
+VERIFIQUE SE A EMPRESA TEM:
 
-2. SUDENE (Superintendência do Desenvolvimento do Nordeste)
-   - Isenção IRPJ/CSLL
-   - Estados: BA, PE, AL, SE, RN, PB, CE, PI, MA
+1. **SUDAM** (se opera em: RO, AC, AM, RR, PA, AP, TO, MA)
+   - Isenção de 75% IRPJ/CSLL
+   - Redução IPI
 
-3. PADIS/PADCT (Tecnologia)
-   - Se houver R&D em biotech
+2. **SUDENE** (se opera em: AL, BA, CE, MA, PB, PE, PI, RN, SE)
+   - Isenção de 75% IRPJ/CSLL
 
-4. Lei Rouanet (se houver projetos culturais)
+3. **PADIS** (se tem P&D em tecnologia)
 
-5. Lei de Informática (se houver software)
+4. Incentivos estaduais de ICMS
 
-VERIFICAR:
-- Nome da lei/decreto
-- Percentual de isenção
-- Data de vigência
-- Data de vencimento
-- Unidades elegíveis (qual fazenda tem benefício)
+BUSQUE EM:
+- Sites oficiais SUDAM/SUDENE
+- Notícias sobre aprovação de projetos
+- Relatórios de sustentabilidade da empresa
 
 RETORNE JSON:
 {{
     "beneficios_ativos": [
         {{
-            "tipo": "SUDAM",
-            "isenção_irpj": "75%",
-            "isenção_csll": "75%",
-            "unidade": "Fazenda Porto Velho, RO",
-            "data_inicio": "2020-01-01",
-            "data_vencimento": "2030-12-31",
-            "valor_economizado_anual": "R$ 45 milhões",
-            "status": "Ativo"
-        }},
-        {{
-            "tipo": "SUDENE",
-            "isenção_irpj": "75%",
-            "isenção_csll": "75%",
-            "unidade": "Fazenda São Luís, MA",
-            "data_inicio": "2019-01-01",
-            "data_vencimento": "2029-12-31",
-            "valor_economizado_anual": "R$ 32 milhões",
-            "status": "Ativo"
+            "tipo": "SUDAM/SUDENE/Estadual",
+            "estado": "UF",
+            "isenção_irpj": "X%",
+            "economia_estimada_anual": "R$ X milhões",
+            "vigencia": "até XXXX"
         }}
     ],
-    "economia_fiscal_anual_total": "R$ 77 milhões",
-    "proximos_vencimentos": "2030",
-    "recomendacao": "Empresa tem fluxo de caixa livre significativo. Capacidade de investimento em tecnologia: R$ 50-100M/ano."
+    "economia_fiscal_anual_total": "R$ 0 ou N/D"
 }}"""
-        
+
         try:
-            response = await self.gemini.call_with_retry(prompt, max_retries=3)
+            response = await self.gemini.call_with_retry(
+                prompt,
+                max_retries=2,
+                use_search=True,
+                temperature=0.1
+            )
+            
             data = self._parse_json_response(response)
-            logger.info(f"[INCENTIVOS] ✅ Economia anual: {data.get('economia_fiscal_anual_total', 'N/D')}")
+            logger.info(f"[INCENTIVOS] ✅ Análise concluída")
             return data
+            
         except Exception as e:
             logger.error(f"[INCENTIVOS] ❌ Erro: {e}")
-            return {"beneficios_ativos": [], "economia_fiscal_anual_total": "N/D", "status": "erro"}
+            return {"beneficios_ativos": [], "status": "erro"}
     
-    # ======== MULTAS AMBIENTAIS ========
+    # ======== MULTAS AMBIENTAIS (ULTRA-AGRESSIVO) ========
     async def varredura_multas_ambientais(self, cnpj: str, razao_social: str) -> Dict:
         """
-        Busca em listas de embargos do Ibama e SEMA.
-        Se tem multa = tem dor. Se tem dor = precisa de consultoria ambiental ou compliance.
+        Busca multas do Ibama/SEMA.
         """
         logger.info(f"[MULTAS] Varredura ambiental: {razao_social}")
         
-        prompt = f"""Você é especialista em compliance ambiental e regularização fundiária.
+        prompt = f"""BUSCA: PASSIVOS AMBIENTAIS
 
+EMPRESA: {razao_social}
 CNPJ: {cnpj}
-RAZÃO SOCIAL: {razao_social}
 
-BUSQUE:
-1. Embargos do IBAMA (lista pública de propriedades embargadas)
-2. Multas do IBAMA (em reais, data, motivo)
-3. Autos de infração ambiental (federal)
-4. Multas estaduais de SEMA (Santa Catarina, Paraná, etc)
-5. Débitos de multas (pagas ou pendentes)
-6. Ações civis públicas por dano ambiental
-7. Passivos ambientais (desmatamento ilegal, APP degradada)
+PROCURE EM:
+1. Lista de embargos do IBAMA (públicas)
+2. Autos de infração ambiental
+3. Notícias sobre multas ou processos ambientais
+4. TCU/TCE - fiscalizações ambientais
 
-NÃO É SÓ "RISCO":
-- Se tem multa = tem dor
-- Dor = necessidade de solução
-- Soluciones: consultoria ambiental, software de compliance (Klassmatt, Agrosmart, etc)
+SE ENCONTRAR:
+- Valor da multa
+- Motivo (desmatamento, APP, queimada)
+- Status (paga, pendente, embargada)
+- Data
+
+SE NÃO ENCONTRAR NADA:
+- Retorne "score_risco_ambiental": "Baixo"
 
 RETORNE JSON:
 {{
-    "multas_ativas": [
-        {{
-            "id_processo": "IBM-2024-001234",
-            "data": "2024-01-15",
-            "valor_multa": "R$ 2.5 milhões",
-            "motivo": "Desmatamento em APP",
-            "status": "Embargada",
-            "propriedade": "Fazenda X, MT",
-            "data_vencimento_pagamento": "2024-03-15",
-            "paga": false
-        }}
-    ],
-    "debitos_ambientais_total": "R$ 8.7 milhões",
-    "multas_pagas": [
-        {{"valor": "R$ 1.2M", "data": "2023-12-01", "motivo": "Queimada irregular"}}
-    ],
-    "propriedades_embargadas": 2,
-    "score_risco_ambiental": "Alto",
-    "oportunidades_remedicao": [
-        "Consultoria em regularização de APP (WRI Brasil, TNC)",
-        "Software de compliance ambiental (Klassmatt P2M)",
-        "Programa de rastreabilidade de grãos (Mercado de Crédito de Carbono)"
-    ]
+    "multas_ativas": [],
+    "debitos_ambientais_total": "R$ 0 ou N/D",
+    "propriedades_embargadas": 0,
+    "score_risco_ambiental": "Baixo/Médio/Alto",
+    "observacoes": ""
 }}"""
-        
+
         try:
-            response = await self.gemini.call_with_retry(prompt, max_retries=3)
+            response = await self.gemini.call_with_retry(
+                prompt,
+                max_retries=2,
+                use_search=True,
+                temperature=0.1
+            )
+            
             data = self._parse_json_response(response)
-            logger.info(f"[MULTAS] ✅ Débitos identificados: {data.get('debitos_ambientais_total', 'N/D')}")
+            logger.info(f"[MULTAS] ✅ Varredura concluída")
             return data
+            
         except Exception as e:
             logger.error(f"[MULTAS] ❌ Erro: {e}")
-            return {"multas_ativas": [], "debitos_ambientais_total": "N/D", "status": "erro"}
+            return {
+                "multas_ativas": [],
+                "score_risco_ambiental": "Desconhecido",
+                "status": "erro"
+            }
     
-    # ======== PROCESSOS TRABALHISTAS ========
+    # ======== PROCESSOS TRABALHISTAS (ULTRA-AGRESSIVO) ========
     async def rastreio_processos_trabalhistas(self, cnpj: str, razao_social: str) -> Dict:
         """
-        Quantidade de processos ativos no TRT/Jusbrasil/Escavador.
-        Se maioria é horas extras = dor em gestão de turno no campo.
+        Busca processos no TRT via Jusbrasil/Escavador.
         """
         logger.info(f"[TRT] Rastreando processos: {razao_social}")
         
-        prompt = f"""Você é especialista em direito trabalhista agrícola.
+        prompt = f"""BUSCA: PROCESSOS TRABALHISTAS
 
+EMPRESA: {razao_social}
 CNPJ: {cnpj}
-RAZÃO SOCIAL: {razao_social}
 
 BUSQUE EM:
-1. Jusbrasil (processos públicos)
-2. Escavador (banco de processos)
-3. TRT (Tribunal Regional do Trabalho) de cada estado onde opera
+- Jusbrasil (processos públicos)
+- Escavador
+- TST/TRT (tribunais regionais do trabalho)
 
 PROCURE POR:
-- Número total de processos ativos
-- Natureza dos processos (horas extras, acidente, FGTS, rescisão, etc)
-- Valores reclamados (em reais)
-- Sentença (favorável/desfavorável)
-- Executados/em execução
+- Número de processos ativos
+- Tipo: horas extras, acidente, rescisão, FGTS
+- Valores reclamados
+- Padrão (se maioria é mesmo tipo)
 
-ANÁLISE DE PADRÃO:
-- Se >60% são "horas extras" = falha em sistema de ponto/turno
-- Se >40% são "acidente de trabalho" = falha em segurança
-- Se crescimento ano/ano = problema sistêmico, não pontual
-
-OPORTUNIDADE SENIOR HCM:
-- Sistema de ponto biométrico no campo
-- Gestão de turno mobile
-- Compliance trabalhista automático
+ANÁLISE:
+- >60% horas extras = falha em sistema de ponto
+- >40% acidentes = falha em segurança
 
 RETORNE JSON:
 {{
-    "total_processos_ativos": 156,
+    "total_processos_ativos": 0,
     "processos_por_tipo": {{
-        "horas_extras": 98,
-        "acidente_trabalho": 23,
-        "fgts_indevido": 18,
-        "rescisao_indevida": 12,
-        "equipamento_protecao": 5
+        "horas_extras": 0,
+        "acidente_trabalho": 0,
+        "outros": 0
     }},
-    "valor_total_reclamado": "R$ 47 milhões",
-    "sentencas_desfavoraveis": 89,
-    "sentencas_favoraveis": 34,
-    "em_execucao": 78,
-    "padrão_identificado": "Horas extras (63% dos casos) - Indica falha crítica em gestão de turno e sistema de ponto",
-    "dor_principal": "Gestão de turno agrícola inadequada, sistema de ponto manual ou ausente",
-    "oportunidade_venda": [
-        "Senior HCM com módulo de Gestão de Turno Agrícola",
-        "Sistema de Ponto Biométrico Mobile",
-        "Compliance Trabalhista Automático"
-    ],
-    "potencial_redução": "R$ 20-30M/ano com implantação de sistema adequado"
+    "valor_total_reclamado": "R$ 0 ou N/D",
+    "padrão_identificado": "",
+    "dor_principal": ""
 }}"""
-        
+
         try:
-            response = await self.gemini.call_with_retry(prompt, max_retries=3)
+            response = await self.gemini.call_with_retry(
+                prompt,
+                max_retries=2,
+                use_search=True,
+                temperature=0.1
+            )
+            
             data = self._parse_json_response(response)
             logger.info(f"[TRT] ✅ {data.get('total_processos_ativos', 0)} processos identificados")
             return data
+            
         except Exception as e:
             logger.error(f"[TRT] ❌ Erro: {e}")
-            return {"total_processos_ativos": 0, "processos_por_tipo": {}, "status": "erro"}
+            return {
+                "total_processos_ativos": 0,
+                "processos_por_tipo": {},
+                "status": "erro"
+            }
     
     def _parse_json_response(self, response: str) -> Dict:
-        """Parse seguro de JSON."""
+        """Parse ultra-defensivo de JSON."""
+        if not response:
+            return {}
+        
         try:
             clean = response.replace("```json", "").replace("```", "").strip()
-            return json.loads(clean)
+            start = clean.find('{')
+            end = clean.rfind('}')
+            if start >= 0 and end > start:
+                json_str = clean[start:end+1]
+                return json.loads(json_str)
         except:
-            logger.warning("Falha ao parsear JSON financeiro")
-            return {}
+            pass
+        
+        try:
+            match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response, re.DOTALL)
+            if match:
+                return json.loads(match.group(0))
+        except:
+            pass
+        
+        logger.warning(f"[PARSE] Falha ao parsear JSON")
+        return {}

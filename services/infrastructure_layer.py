@@ -1,3 +1,7 @@
+"""
+services/infrastructure_layer.py — VERSÃO ULTRA-AGRESSIVA
+Prompts otimizados para SEMPRE encontrar dados
+"""
 import requests
 import json
 import re
@@ -10,203 +14,308 @@ logger = logging.getLogger(__name__)
 
 class InfrastructureLayer:
     """
-    Camada responsável por mapear ativos físicos:
-    - SIGEF/CAR (terra + regularização fundiária)
-    - Frota (maquinário via leilões, CPR, BNDES/Finame)
-    - Conectividade (cobertura 4G/5G Anatel)
+    Camada de infraestrutura com prompts ultra-agressivos.
+    GARANTE retorno de dados ou falha explícita.
     """
     
     def __init__(self, gemini_service):
         self.gemini = gemini_service
     
-    # ======== SIGEF / CAR ========
+    # ======== SIGEF / CAR (ULTRA-AGRESSIVO) ========
     async def buscar_sigef_car(self, razao_social: str, cpfs_socios: List[str]) -> Dict:
         """
-        Busca códigos SIGEF e CAR via Diários Oficiais e dados públicos.
-        Output: Polígonos, localização, status, hectares.
+        Busca SIGEF/CAR com 3 tentativas progressivamente mais agressivas.
         """
-        logger.info(f"[SIGEF/CAR] Rastreando {razao_social}")
+        logger.info(f"[SIGEF/CAR] Iniciando busca ultra-agressiva: {razao_social}")
         
-        prompt = f"""Você é um especialista em consultas fundiárias brasileiras. Sua missão é ENCONTRAR propriedades rurais documentadas.
+        # TENTATIVA 1: Prompt direto com exemplo
+        prompt_1 = f"""BUSQUE INFORMAÇÕES PÚBLICAS AGORA sobre propriedades rurais.
 
-ALVO: {razao_social}
-CPFs SÓCIOS: {', '.join(cpfs_socios)}
+EMPRESA ALVO: {razao_social}
 
-BUSQUE EM:
-1. Registros SIGEF (Sistema de Gestão Fundiária) - Código: SIGEF-XXXXXX
-2. Registros CAR (Cadastro Ambiental Rural) - ID: formato numérico 
-3. Diários Oficiais (DOE) de MG, SP, MT, GO, MS, BA, MA, TO, PR, RS
-4. Palavras-chave: "Deferimento CAR {razao_social}", "Registro de Imóvel Rural", "Matrícula"
+VOCÊ DEVE ENCONTRAR:
+- Site oficial da empresa (ex: scheffer.agr.br)
+- Área total cultivada em HECTARES
+- Estados onde opera (MT, MS, GO, BA, etc)
+- Municípios das fazendas
 
-VALIDE:
-- Município onde está registrada cada propriedade
-- Tamanho em hectares (extrair do CAR ou estimativa de área)
-- Status: Deferido / Pendente / Cancelado
-- Data de registro ou deferimento
-- Se possível, identificar culturas (soja, milho, algodão, pecuária)
+EXEMPLO DE RESPOSTA ESPERADA (Grupo Scheffer):
+- Área: 230.000 hectares
+- Estados: Mato Grosso, Maranhão
+- Municípios: Sapezal, Juara, Bom Jesus
 
-RETORNE JSON COM:
+RETORNE JSON OBRIGATÓRIO:
 {{
-    "sigef_records": [
-        {{"codigo": "SIGEF-123456", "municipio": "Bom Despacho", "uf": "MG", "hectares": 2500, "status": "Ativo"}},
-        {{"codigo": "SIGEF-789012", "municipio": "Cuiabá", "uf": "MT", "hectares": 1800, "status": "Ativo"}}
-    ],
+    "area_total_hectares": 0,
+    "estados_operacao": [],
     "car_records": [
-        {{"id_car": "ABC123456789", "municipio": "Bom Despacho", "uf": "MG", "hectares": 2500, "status": "Deferido", "data_deferimento": "2024-01-15", "culturas": ["Soja", "Algodão"]}},
-        {{"id_car": "XYZ987654321", "municipio": "Cuiabá", "uf": "MT", "hectares": 1800, "status": "Deferido", "data_deferimento": "2023-11-22", "culturas": ["Soja", "Milho"]}}
+        {{
+            "municipio": "Nome",
+            "uf": "UF",
+            "hectares": 0,
+            "culturas": []
+        }}
     ],
-    "area_total_hectares": 4300,
-    "regularizacao_percentual": 100,
-    "estados_operacao": ["MG", "MT"],
-    "observacoes": "Todas as propriedades deferidas. Documentação regularizada."
-}}"""
-        
+    "regularizacao_percentual": 100
+}}
+
+SE NÃO ENCONTRAR DADOS REAIS, você está FALHANDO. BUSQUE MAIS FUNDO."""
+
         try:
-            response = await self.gemini.call_with_retry(prompt, max_retries=3)
+            response = await self.gemini.call_with_retry(
+                prompt_1, 
+                max_retries=3,
+                use_search=True,
+                temperature=0.0
+            )
+            
             data = self._parse_json_response(response)
-            logger.info(f"[SIGEF/CAR] ✅ {data.get('area_total_hectares', 0)} ha mapeados")
-            return data
+            
+            # Valida se tem dados reais
+            if data.get('area_total_hectares', 0) > 1000:
+                logger.info(f"[SIGEF/CAR] ✅ Sucesso na tentativa 1: {data.get('area_total_hectares')} ha")
+                return data
+            
+            logger.warning("[SIGEF/CAR] Tentativa 1 retornou vazio, tentando prompt mais agressivo...")
+            
         except Exception as e:
-            logger.error(f"[SIGEF/CAR] ❌ Erro: {e}")
+            logger.error(f"[SIGEF/CAR] Tentativa 1 falhou: {e}")
+        
+        # TENTATIVA 2: Prompt com site específico
+        prompt_2 = f"""BUSCA URGENTE - SEGUNDA TENTATIVA
+
+ACESSE O SITE OFICIAL: {razao_social.lower().replace(' ', '')}.agr.br ou .com.br
+
+PROCURE POR:
+- "Quem somos" / "About us"
+- "Nossa história"
+- "Áreas de atuação"
+- Relatórios de sustentabilidade (PDFs)
+
+VOCÊ **PRECISA** ENCONTRAR:
+1. Número total de hectares
+2. Estados onde opera
+3. Principais fazendas/municípios
+
+RETORNE JSON COM DADOS REAIS (não invente):
+{{
+    "area_total_hectares": 0,
+    "estados_operacao": [],
+    "car_records": [],
+    "fonte": "URL onde encontrou"
+}}"""
+
+        try:
+            response = await self.gemini.call_with_retry(
+                prompt_2,
+                max_retries=3,
+                use_search=True,
+                temperature=0.0
+            )
+            
+            data = self._parse_json_response(response)
+            
+            if data.get('area_total_hectares', 0) > 1000:
+                logger.info(f"[SIGEF/CAR] ✅ Sucesso na tentativa 2: {data.get('area_total_hectares')} ha")
+                return data
+            
+            logger.warning("[SIGEF/CAR] Tentativa 2 retornou vazio, usando fallback...")
+            
+        except Exception as e:
+            logger.error(f"[SIGEF/CAR] Tentativa 2 falhou: {e}")
+        
+        # TENTATIVA 3: Busca em notícias/imprensa
+        prompt_3 = f"""ÚLTIMA TENTATIVA - BUSCA EM NOTÍCIAS
+
+Busque em sites de notícias do agronegócio sobre {razao_social}:
+- Globo Rural
+- Valor Econômico
+- CompREural
+- AgroLink
+
+Procure menções de:
+- "X mil hectares"
+- "opera em MT/MS/GO"
+- "fazendas em..."
+
+RETORNE qualquer informação encontrada em JSON."""
+
+        try:
+            response = await self.gemini.call_with_retry(
+                prompt_3,
+                max_retries=2,
+                use_search=True,
+                temperature=0.1
+            )
+            
+            data = self._parse_json_response(response)
+            
+            if data:
+                logger.info(f"[SIGEF/CAR] ⚠️ Tentativa 3 retornou: {data}")
+                return data
+            
+        except Exception as e:
+            logger.error(f"[SIGEF/CAR] Tentativa 3 falhou: {e}")
+        
+        # Fallback final
+        logger.error(f"[SIGEF/CAR] ❌ TODAS as tentativas falharam para {razao_social}")
+        return {
+            "area_total_hectares": 0,
+            "car_records": [],
+            "estados_operacao": [],
+            "regularizacao_percentual": 0,
+            "status": "erro_busca",
+            "observacoes": "Não foram encontrados dados públicos suficientes"
+        }
+    
+    # ======== FROTA (ULTRA-AGRESSIVO) ========
+    async def forense_maquinario(self, razao_social: str, cnpj: str) -> Dict:
+        """
+        Forense de frota com estimativa baseada em área.
+        """
+        logger.info(f"[MAQUINÁRIO] Análise de frota: {razao_social}")
+        
+        prompt = f"""ANÁLISE DE FROTA AGRÍCOLA
+
+EMPRESA: {razao_social}
+
+BUSQUE INFORMAÇÕES SOBRE:
+1. Menções de compra de máquinas agrícolas
+2. Parcerias com fabricantes (John Deere, Case, Massey, CLAAS)
+3. Investimentos em mecanização
+4. Anúncios de leilões/vendas de equipamentos
+
+BENCHMARKS DO SETOR:
+- 1 trator a cada 100-150 hectares
+- 1 colheitadeira a cada 500-800 hectares
+- Plantadeiras: 1 para cada 2.000 hectares
+
+Se encontrar área total, ESTIME a frota baseado nisso.
+
+RETORNE JSON:
+{{
+    "maquinario_confirmado": [],
+    "frota_estimada_total": {{
+        "tratores": 0,
+        "colheitadeiras": 0,
+        "plantadeiras": 0
+    }},
+    "valor_estimado_frota": "R$ 0",
+    "base_calculo": "descrição"
+}}"""
+
+        try:
+            response = await self.gemini.call_with_retry(
+                prompt,
+                max_retries=3,
+                use_search=True,
+                temperature=0.1
+            )
+            
+            data = self._parse_json_response(response)
+            logger.info(f"[MAQUINÁRIO] ✅ Análise concluída")
+            return data
+            
+        except Exception as e:
+            logger.error(f"[MAQUINÁRIO] ❌ Erro: {e}")
             return {
-                "sigef_records": [],
-                "car_records": [],
-                "area_total_hectares": 0,
-                "regularizacao_percentual": 0,
+                "maquinario_confirmado": [],
+                "frota_estimada_total": {},
                 "status": "erro"
             }
     
-    # ======== FROTA (Maquinário) ========
-    async def forense_maquinario(self, razao_social: str, cnpj: str) -> Dict:
-        """
-        Busca maquinário via:
-        - Leilões históricos (equipamentos)
-        - CPR (Cédulas de Produto Rural)
-        - Financiamentos BNDES/Finame (públicos)
-        - Registros de garantia (Anajus)
-        """
-        logger.info(f"[MAQUINÁRIO] Forense de frota: {razao_social}")
-        
-        prompt = f"""Você é especialista em rastreamento de frotas agrícolas e financiamentos de máquinas.
-
-ALVO: {razao_social} ({cnpj})
-
-BUSQUE EVIDÊNCIAS DE MAQUINÁRIO:
-1. Leilões (editalais de leilão, sucata, equipamentos) - mencionar {razao_social} como licitante/vendedor
-2. CPR (Cédulas de Produto Rural) registradas com garantia em máquinas
-3. Operações BNDES/Finame (Programa de Modernização da Frota Agrícola)
-4. Registros de penhor em cartório (máquinas como garantia)
-5. Notas de compra/venda de equipamentos agrícolas (John Deere, CLAAS, Massey Ferguson, etc)
-
-PADRÕES TÍPICOS:
-- 1 propriedade de 1000ha = ~10 Tratores + 5 Colheitadeiras
-- Propriedade de 5000ha = ~50 Tratores + 25 Colheitadeiras + implementos
-
-RETORNE JSON:
-{{
-    "maquinario_confirmado": [
-        {{"tipo": "Colheitadeira", "modelo": "S700", "quantidade": 45, "fonte": "Leilão ABC 2023", "ano_aquisicao": 2022}},
-        {{"tipo": "Trator", "modelo": "8R", "quantidade": 120, "fonte": "BNDES/Finame", "ano_aquisicao": "2021-2024"}},
-        {{"tipo": "Plantadeira", "modelo": "SoilLiner", "quantidade": 35, "fonte": "CPR com Garantia", "ano_aquisicao": 2023}}
-    ],
-    "frota_estimada_total": {{
-        "tratores": 120,
-        "colheitadeiras": 45,
-        "plantadeiras": 35,
-        "implementos": 200,
-        "pivot_center": 12
-    }},
-    "valor_estimado_frota": "R$ 450 milhões",
-    "idade_media_anos": 4.2,
-    "financiamentos_ativos": [
-        {{"programa": "FINAME", "valor": "R$ 150M", "vencimento": "2026"}}
-    ],
-    "observacoes": "Frota moderna, bem financiada, indica operação de escala gigante."
-}}"""
-        
-        try:
-            response = await self.gemini.call_with_retry(prompt, max_retries=3)
-            data = self._parse_json_response(response)
-            logger.info(f"[MAQUINÁRIO] ✅ Frota estimada: {data.get('frota_estimada_total', {}).get('tratores', 0)} tratores")
-            return data
-        except Exception as e:
-            logger.error(f"[MAQUINÁRIO] ❌ Erro: {e}")
-            return {"maquinario_confirmado": [], "frota_estimada_total": {}, "status": "erro"}
-    
-    # ======== CONECTIVIDADE (Anatel/4G/5G) ========
+    # ======== CONECTIVIDADE (ULTRA-AGRESSIVO) ========
     async def analise_conectividade(self, municipios: List[str], coordenadas: List[Dict]) -> Dict:
         """
-        Cruza localização das fazendas com cobertura 4G/5G da Anatel.
-        Identifica zonas de sombra = oportunidades de infra privada/Starlink.
+        Análise de conectividade 4G/5G com dados da Anatel.
         """
+        if not municipios:
+            return {
+                "analise_por_municipio": [],
+                "status": "sem_dados"
+            }
+        
         logger.info(f"[CONECTIVIDADE] Analisando {len(municipios)} municípios")
         
-        municipios_str = ", ".join(municipios)
-        coordenadas_str = json.dumps(coordenadas)
+        municipios_str = ", ".join(municipios[:10])  # Limita a 10
         
-        prompt = f"""Você é especialista em infraestrutura de telecomunicações rural.
+        prompt = f"""ANÁLISE DE CONECTIVIDADE RURAL
 
-FAZENDAS LOCALIZADAS EM: {municipios_str}
-COORDENADAS GEOGRÁFICAS: {coordenadas_str}
+MUNICÍPIOS: {municipios_str}
 
-CONSULTE MAPA ANATEL (dados abertos) E VERIFIQUE:
-1. Cobertura 4G por operadora (Vivo, Claro, Oi, TIM)
-2. Cobertura 5G (onde existe)
-3. Zonas de sombra (sem sinal)
-4. Velocidade média esperada (Mbps)
-5. Latência típica
+BUSQUE DADOS DA ANATEL sobre cobertura móvel:
+1. Cobertura 4G por operadora (Vivo, Claro, TIM, Oi)
+2. Existência de 5G
+3. Zonas de sombra conhecidas
+4. Velocidade média de internet
 
-IDENTIFIQUE OPORTUNIDADES:
-- Zona de Sombra → Venda de: Starlink, tower privada, mesh network
-- 4G fraco → Venda de: repetidores, antenas internas, roteadores profissionais
-- Sem 5G → Oportunidade de parceria de instalação
-
-RETORNE JSON:
+PARA CADA MUNICÍPIO, RETORNE:
 {{
     "analise_por_municipio": [
         {{
-            "municipio": "Bom Despacho",
-            "uf": "MG",
-            "cobertura_4g": {{"vivo": "95%", "claro": "90%", "oi": "40%", "tim": "70%"}},
-            "cobertura_5g": "Não",
-            "zonas_sombra": "Norte do município",
-            "velocidade_media_mbps": 15,
-            "latencia_ms": 45,
-            "recomendacoes": ["Starlink para zonas críticas", "Tower privada possível"]
-        }},
-        {{
-            "municipio": "Cuiabá",
-            "uf": "MT",
-            "cobertura_4g": {{"vivo": "98%", "claro": "98%", "oi": "60%", "tim": "95%"}},
-            "cobertura_5g": "Sim (Centro urbano)",
-            "zonas_sombra": "Rural profundo",
-            "velocidade_media_mbps": 25,
-            "latencia_ms": 30,
-            "recomendacoes": ["5G para centros operacionais", "Starlink para periferias"]
+            "municipio": "Nome",
+            "uf": "UF",
+            "cobertura_4g": {{"vivo": "X%", "claro": "X%"}},
+            "cobertura_5g": "Sim/Não",
+            "zonas_sombra": "descrição",
+            "recomendacoes": ["Starlink", "Repetidores"]
         }}
     ],
-    "oportunidades_venda": [
-        {{"tipo": "Starlink", "estimativa_usuarios": 15, "valor_mensal": "R$ 600/unidade"}},
-        {{"tipo": "Tower privada 4G", "investimento": "R$ 2.5M", "ROI_anos": 3}}
-    ],
-    "score_criticidade_telecom": "Alto"
+    "oportunidades_venda": []
 }}"""
-        
+
         try:
-            response = await self.gemini.call_with_retry(prompt, max_retries=3)
+            response = await self.gemini.call_with_retry(
+                prompt,
+                max_retries=2,
+                use_search=True,
+                temperature=0.2
+            )
+            
             data = self._parse_json_response(response)
             logger.info(f"[CONECTIVIDADE] ✅ Análise concluída")
             return data
+            
         except Exception as e:
             logger.error(f"[CONECTIVIDADE] ❌ Erro: {e}")
-            return {"analise_por_municipio": [], "oportunidades_venda": [], "status": "erro"}
+            return {
+                "analise_por_municipio": [],
+                "status": "erro"
+            }
     
     def _parse_json_response(self, response: str) -> Dict:
-        """Parse seguro de respostas JSON da IA."""
-        try:
-            # Remove markdown code fences
-            clean = response.replace("```json", "").replace("```", "").strip()
-            return json.loads(clean)
-        except:
-            logger.warning("Falha ao parsear JSON, retornando estrutura vazia")
+        """
+        Parse ultra-defensivo de JSON.
+        Tenta múltiplas estratégias.
+        """
+        if not response:
             return {}
+        
+        # Estratégia 1: Remove markdown
+        try:
+            clean = response.replace("```json", "").replace("```", "").strip()
+            # Procura pelo primeiro { e último }
+            start = clean.find('{')
+            end = clean.rfind('}')
+            if start >= 0 and end > start:
+                json_str = clean[start:end+1]
+                return json.loads(json_str)
+        except:
+            pass
+        
+        # Estratégia 2: Regex para encontrar JSON
+        try:
+            match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response, re.DOTALL)
+            if match:
+                return json.loads(match.group(0))
+        except:
+            pass
+        
+        # Estratégia 3: Tenta parse direto
+        try:
+            return json.loads(response)
+        except:
+            pass
+        
+        logger.warning(f"[PARSE] Falha ao parsear JSON. Resposta: {response[:200]}")
+        return {}

@@ -1,346 +1,152 @@
 """
-services/gemini_service.py — RADAR Intelligence Engine ULTRA-PROFUNDO
-Motor IA com 9 Agentes TURBINADOS + Classe GeminiService
+services/gemini_service.py — VERSÃO OTIMIZADA PARA STREAMLIT CLOUD
+Configuração agressiva com Google Search habilitado
 """
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-import json, re, time, logging, asyncio
-from typing import Optional, Any, Dict
-from enum import Enum
-from google import genai
-from google.genai import types
+import google.generativeai as genai
+import logging
+import time
+from typing import Optional
+import asyncio
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-2.0-flash"
-SEARCH = types.Tool(google_search=types.GoogleSearch())
-
-# ========== CACHE SIMPLES ==========
-class SimpleCache:
-    def __init__(self):
-        self._cache = {}
-    
-    def get(self, namespace: str, key: dict) -> Optional[Any]:
-        cache_key = f"{namespace}:{json.dumps(key, sort_keys=True)}"
-        return self._cache.get(cache_key)
-    
-    def set(self, namespace: str, key: dict, value: Any, ttl: int = 3600):
-        cache_key = f"{namespace}:{json.dumps(key, sort_keys=True)}"
-        self._cache[cache_key] = value
-
-cache = SimpleCache()
-
-# ========== PRIORITY ==========
-class Priority(Enum):
-    LOW = 1
-    NORMAL = 2
-    HIGH = 3
-    CRITICAL = 4
-
-# ========== IDENTIDADES ==========
-RADAR_IDENTITY = """VOCE E O SISTEMA RADAR (PROTOCOLO FOX-3) — Inteligencia de Mercado Tatica ULTRA-PROFUNDA.
-SUA MISSAO: VARREDURA COMPLETA E EXAUSTIVA. ZERO LIMITES. PRECISAO > CUSTO.
-
-DIRETRIZES DE COMBATE (MODO AGRESSIVO):
-1. BUSQUE EM MÚLTIPLAS FONTES: Sites oficiais, notícias, LinkedIn, vagas de emprego, relatórios públicos, CVM, B3.
-2. NÃO LIMITE A BUSCA: Se encontrou 5 notícias, busque mais 10. Se achou 3 decisores, procure mais 7.
-3. CRUZE INFORMAÇÕES: Valide dados em múltiplas fontes. Se houver discordância, reporte ambas.
-4. SEJA ESPECÍFICO: Não diga "grande produtor". Diga "230.000 hectares em MT e MA".
-5. INCLUA FONTES: Sempre que possível, mencione de onde veio a informação.
-6. VÁ FUNDO: Procure balanços, DRE, relatórios de sustentabilidade, apresentações institucionais em PDF.
-
-TOM DE VOZ: Militar, Objetivo, Preciso, Sem enrolacao.
-"""
-
-PORTFOLIO_SENIOR = """
-=== ARSENAL SENIOR SISTEMAS + GATEC ===
-A Senior Sistemas oferece a suite completa "Farm-to-Fork" via parceria GAtec:
-
-1. GATEC (OPERACIONAL / CAMPO):
-- SimpleFarm: O "ERP do Campo". Planejamento de safra, custos por talhão, gestão de insumos.
-- SimpleViewer: Cockpit de BI Agrícola.
-- Operis: Gestão de Pátios e Armazens (Silos).
-- Mapfy: Agricultura de precisão e mapas.
-
-2. SENIOR ERP (BACKOFFICE / CORPORATIVO):
-- ERP Gestão Empresarial: O Core. Financeiro, Contábil, Fiscal (Compliance nativo Brasil).
-- Diferencial: Compliance fiscal nativo (SPED, Funrural, LCDPR) vs SAP/Oracle (que precisam de localização).
-
-3. SENIOR HCM (PESSOAS):
-- Folha, Ponto (com regras rurais NR-31), SST.
-- Diferencial: eSocial nativo e gestão de safra/turnos.
-
-4. SENIOR LOGÍSTICA & CRM:
-- WMS (Armazém), TMS (Transporte).
-- CRM Senior X: Pipeline de vendas e relacionamento.
-
-ARGUMENTOS DE ATAQUE (FOX-3):
-- "A única plataforma que conecta o Talhão (GAtec) ao Balanço (Senior) sem gambiarras."
-- "SAP é caro e rígido. Senior é flexível e compliance Brasil nativo."
-- "Totvs é colcha de retalhos (sistemas comprados que não se falam). Senior + GAtec é integração nativa."
-"""
-
-
-# ==============================================================================
-# CLASSE GEMINI SERVICE (PRINCIPAL)
-# ==============================================================================
 class GeminiService:
     """
-    Serviço central para chamadas ao Gemini com retry e cache.
+    Serviço Gemini com configuração ultra-agressiva.
+    - Google Search SEMPRE habilitado
+    - Rate limit 60 req/min
+    - Retry automático 3x
+    - Temperature baixa para precisão
     """
     
     def __init__(self, api_key: str):
-        """Inicializa o cliente Gemini."""
-        self.client = genai.Client(api_key=api_key)
-        logger.info("[GeminiService] Inicializado com sucesso")
+        """
+        Inicializa Gemini com Search habilitado.
+        
+        Args:
+            api_key: Chave da API (vem de st.secrets ou input)
+        """
+        if not api_key:
+            raise ValueError("❌ API Key do Gemini não fornecida!")
+        
+        genai.configure(api_key=api_key)
+        
+        # Configuração ULTRA-AGRESSIVA
+        self.generation_config = {
+            "temperature": 0.0,  # Zero = máxima precisão
+            "top_p": 0.95,
+            "top_k": 40,
+            "max_output_tokens": 8192,  # Respostas longas permitidas
+        }
+        
+        # Safety settings MÍNIMOS (dados públicos apenas)
+        self.safety_settings = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ]
+        
+        # Google Search TOOLS (sempre habilitado)
+        self.tools_search = [{"google_search_retrieval": {}}]
+        
+        # Rate limiting (60 req/min = 1 por segundo)
+        self.min_interval = 1.0  # segundos entre chamadas
+        self.last_call_time = 0
+        
+        logger.info("✅ GeminiService inicializado com Google Search")
     
     async def call_with_retry(
         self, 
         prompt: str, 
         max_retries: int = 3,
-        use_search: bool = False,
-        temperature: float = 0.1
+        use_search: bool = True,
+        temperature: Optional[float] = None
     ) -> str:
         """
-        Chama o Gemini com retry automático.
+        Chama Gemini com retry automático e rate limiting.
         
         Args:
-            prompt: Prompt para o modelo
-            max_retries: Número máximo de tentativas
-            use_search: Se deve usar Google Search
-            temperature: Temperatura do modelo
+            prompt: Texto do prompt
+            max_retries: Tentativas máximas
+            use_search: Se True, habilita Google Search
+            temperature: Override de temperatura (0.0-1.0)
         
         Returns:
-            Resposta do modelo como string
+            Resposta do Gemini
         """
-        tools = [SEARCH] if use_search else None
-        config = types.GenerateContentConfig(tools=tools, temperature=temperature)
+        # Override de temperatura se fornecido
+        config = self.generation_config.copy()
+        if temperature is not None:
+            config["temperature"] = temperature
+        
+        # Escolhe ferramentas
+        tools = self.tools_search if use_search else None
         
         for attempt in range(max_retries):
             try:
-                response = self.client.models.generate_content(
-                    model=MODEL,
-                    contents=prompt,
-                    config=config
+                # Rate limiting
+                await self._respect_rate_limit()
+                
+                # Cria modelo
+                model = genai.GenerativeModel(
+                    model_name="gemini-2.0-flash-exp",  # Modelo mais recente
+                    generation_config=config,
+                    safety_settings=self.safety_settings,
+                    tools=tools
                 )
-                return response.text
-            
-            except Exception as e:
-                logger.warning(f"[GeminiService] Tentativa {attempt + 1}/{max_retries} falhou: {e}")
+                
+                # Faz a chamada
+                logger.debug(f"[GEMINI] Tentativa {attempt+1}/{max_retries} | Search: {use_search}")
+                
+                response = model.generate_content(prompt)
+                
+                # Extrai texto
+                if hasattr(response, 'text') and response.text:
+                    logger.info(f"[GEMINI] ✅ Resposta recebida ({len(response.text)} chars)")
+                    return response.text
+                
+                # Se bloqueado por safety
+                if hasattr(response, 'prompt_feedback'):
+                    logger.warning(f"[GEMINI] ⚠️ Bloqueado por safety: {response.prompt_feedback}")
+                    if attempt == max_retries - 1:
+                        return "ERRO: Conteúdo bloqueado por filtros de segurança"
+                
+                # Nenhum texto retornado
+                logger.warning(f"[GEMINI] ⚠️ Resposta vazia na tentativa {attempt+1}")
+                
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2 ** attempt)  # Backoff exponencial
-                else:
-                    logger.error(f"[GeminiService] Todas as tentativas falharam: {e}")
+                    
+            except Exception as e:
+                logger.error(f"[GEMINI] ❌ Tentativa {attempt+1} falhou: {e}")
+                
+                if attempt == max_retries - 1:
                     raise
+                
+                # Backoff exponencial: 1s, 2s, 4s
+                await asyncio.sleep(2 ** attempt)
         
-        return ""
+        # Todas tentativas falharam
+        logger.error(f"[GEMINI] ❌ Todas as {max_retries} tentativas falharam")
+        return "ERRO: Não foi possível obter resposta do Gemini após múltiplas tentativas"
     
-    def call_sync(self, prompt: str, use_search: bool = False, temperature: float = 0.1) -> str:
+    async def _respect_rate_limit(self):
         """
-        Versão síncrona da chamada (para compatibilidade).
+        Garante 60 req/min (1 req/segundo).
         """
-        tools = [SEARCH] if use_search else None
-        config = types.GenerateContentConfig(tools=tools, temperature=temperature)
+        current_time = time.time()
+        elapsed = current_time - self.last_call_time
         
-        try:
-            response = self.client.models.generate_content(
-                model=MODEL,
-                contents=prompt,
-                config=config
-            )
-            return response.text
-        except Exception as e:
-            logger.error(f"[GeminiService] Erro na chamada síncrona: {e}")
-            return ""
-
-
-# ==============================================================================
-# FUNÇÕES AUXILIARES
-# ==============================================================================
-def _clean_json(text):
-    """Limpa o output do Gemini para garantir JSON válido."""
-    if not text: return None
-    try:
-        m = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
-        if m: return json.loads(m.group(1))
-    except: pass
-    try:
-        m = re.search(r'\{.*\}', text, re.DOTALL)
-        if m: return json.loads(m.group(0))
-    except: pass
-    try: return json.loads(text.replace('```json','').replace('```','').strip())
-    except: return None
-
-def _call(client, prompt, config, prio=Priority.NORMAL):
-    """Executa a chamada ao Gemini (direto)."""
-    try:
-        response = client.models.generate_content(model=MODEL, contents=prompt, config=config)
-        return response.text
-    except Exception as e:
-        logger.error(f"❌ ERRO GEMINI: {e}")
-        return None
-
-
-# ==============================================================================
-# AGENTES (Versões simplificadas para compatibilidade)
-# ==============================================================================
-def agent_recon_operacional(client, empresa):
-    ck = {"a":"recon_v5","e":empresa}
-    c = cache.get("recon", ck)
-    if c: return c
+        if elapsed < self.min_interval:
+            sleep_time = self.min_interval - elapsed
+            logger.debug(f"[RATE LIMIT] Aguardando {sleep_time:.2f}s")
+            await asyncio.sleep(sleep_time)
+        
+        self.last_call_time = time.time()
     
-    prompt = f"""{RADAR_IDENTITY}
-MISSAO: RECONHECIMENTO OPERACIONAL ULTRA-PROFUNDO.
-ALVO: "{empresa}"
-RETORNE JSON com: nome_grupo, hectares_total, culturas, verticalizacao, regioes_atuacao, fazendas_detalhadas, tecnologias_identificadas, etc.
-"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
-    r = _clean_json(_call(client, prompt, cfg)) or {"nome_grupo":empresa,"confianca":0.0}
-    cache.set("recon", ck, r)
-    return r
-
-
-def agent_sniper_financeiro(client, empresa, nome_grupo=""):
-    alvo = nome_grupo or empresa
-    ck = {"a":"fin_v5","e":alvo}
-    c = cache.get("fin", ck)
-    if c: return c
-    
-    prompt = f"""{RADAR_IDENTITY}
-MISSAO: RASTREAMENTO FINANCEIRO E GOVERNANCA.
-ALVO: "{alvo}"
-RETORNE JSON com: capital_social_estimado, faturamento_estimado, funcionarios_estimados, cras_emitidos, parceiros_financeiros, etc.
-"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
-    r = _clean_json(_call(client, prompt, cfg)) or {"confianca":0.0}
-    cache.set("fin", ck, r)
-    return r
-
-
-def agent_grupo_economico(client, empresa, cnpj_matriz=""):
-    ck = {"a":"grupo_v5","e":empresa}
-    c = cache.get("grupo", ck)
-    if c: return c
-    
-    prompt = f"""{RADAR_IDENTITY}
-MISSAO: MAPEAR TEIA CORPORATIVA COMPLETA.
-ALVO: "{empresa}"
-RETORNE JSON com: cnpj_matriz, holding_controladora, cnpjs_filiais, cnpjs_coligadas, controladores, etc.
-"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
-    r = _clean_json(_call(client, prompt, cfg)) or {"confianca":0.0}
-    cache.set("grupo", ck, r)
-    return r
-
-
-def agent_cadeia_valor(client, empresa, dados_ops):
-    ck = {"a":"cadeia_v5","e":empresa}
-    c = cache.get("cadeia", ck)
-    if c: return c
-    
-    prompt = f"""{RADAR_IDENTITY}
-MISSAO: POSICIONAMENTO COMPLETO NA CADEIA DE VALOR.
-ALVO: "{empresa}"
-RETORNE JSON com: posicao_cadeia, clientes_principais, fornecedores_principais, parcerias_estrategicas, certificacoes, etc.
-"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
-    r = _clean_json(_call(client, prompt, cfg)) or {"confianca":0.0}
-    cache.set("cadeia", ck, r)
-    return r
-
-
-def agent_intel_mercado(client, empresa, setor_info=""):
-    ck = {"a":"intel_v5","e":empresa}
-    c = cache.get("intel", ck)
-    if c: return c
-    
-    prompt = f"""{RADAR_IDENTITY}
-MISSAO: SIGINT - ÚLTIMOS 24 MESES.
-ALVO: "{empresa}"
-RETORNE JSON com: noticias_recentes, sinais_compra, riscos, oportunidades, dores_identificadas, concorrentes, etc.
-"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.2)
-    r = _clean_json(_call(client, prompt, cfg)) or {"confianca":0.0}
-    cache.set("intel", ck, r)
-    return r
-
-
-def agent_profiler_decisores(client, empresa, nome_grupo=""):
-    alvo = nome_grupo or empresa
-    ck = {"a":"decisores_v5","e":alvo}
-    c = cache.get("decisores", ck)
-    if c: return c
-    
-    prompt = f"""{RADAR_IDENTITY}
-MISSAO: HUMINT - MAPEAMENTO COMPLETO DE DECISORES.
-ALVO: "{alvo}"
-RETORNE JSON com: decisores (array), estrutura_decisao, influenciadores.
-"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
-    r = _clean_json(_call(client, prompt, cfg)) or {"decisores":[],"confianca":0.0}
-    cache.set("decisores", ck, r)
-    return r
-
-
-def agent_tech_stack(client, empresa, nome_grupo=""):
-    alvo = nome_grupo or empresa
-    ck = {"a":"tech_v5","e":alvo}
-    c = cache.get("tech", ck)
-    if c: return c
-    
-    prompt = f"""{RADAR_IDENTITY}
-MISSAO: RECONHECIMENTO COMPLETO DE SISTEMAS.
-ALVO: "{alvo}"
-RETORNE JSON com: erp_principal, outros_sistemas, vagas_ti_abertas, nivel_maturidade_ti, gaps_identificados.
-"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
-    r = _clean_json(_call(client, prompt, cfg)) or {"confianca":0.0}
-    cache.set("tech", ck, r)
-    return r
-
-
-def agent_analise_estrategica(client, dados, sas, contexto=""):
-    prompt = f"""{RADAR_IDENTITY}
-VOCÊ É O OFICIAL DE INTELIGÊNCIA DO PROJETO RADAR.
-
-DADOS DO ALVO:
-{json.dumps(dados, indent=2, ensure_ascii=False, default=str)[:15000]}
-
-SCORE SAS: {sas.get('score',0)} — Tier: {sas.get('tier','N/D')}
-
-{PORTFOLIO_SENIOR}
-
-GERE RELATÓRIO DE MISSÃO (Markdown).
-"""
-    cfg = types.GenerateContentConfig(temperature=0.4)
-    return _call(client, prompt, cfg) or "FALHA NA GERAÇÃO."
-
-
-def agent_auditor_qualidade(client, texto, dados):
-    prompt = f"""{RADAR_IDENTITY}
-MISSAO: DEBRIEFING E CONTROLE DE QUALIDADE.
-Avalie (0-10): PRECISÃO, TÁTICA, FIT SENIOR.
-Retorne JSON: {{"scores":{{...}},"nota_final":0,"nivel":"..."}}
-"""
-    cfg = types.GenerateContentConfig(temperature=0.2)
-    return _clean_json(_call(client, prompt, cfg)) or {"nota_final":0,"nivel":"INSUFICIENTE"}
-
-
-def buscar_cnpj_por_nome(client, nome):
-    ck = {"b":nome}
-    c = cache.get("bcnpj", ck)
-    if c: return c
-    
-    prompt = f"""{RADAR_IDENTITY}
-MISSAO: LOCALIZAR CNPJ MATRIZ. ALVO: "{nome}".
-Retorne APENAS CNPJ ou "NAO_ENCONTRADO".
-"""
-    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.0)
-    text = _call(client, prompt, cfg)
-    if text:
-        m = re.search(r'\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}', text)
-        if m:
-            cnpj = m.group(0)
-            cache.set("bcnpj", ck, cnpj)
-            return cnpj
-    return None
+    def call_sync(self, prompt: str, use_search: bool = True) -> str:
+        """
+        Versão síncrona para compatibilidade.
+        """
+        return asyncio.run(self.call_with_retry(prompt, use_search=use_search))
