@@ -1,7 +1,7 @@
 """
-services/gemini_service.py — RADAR Intelligence Engine (Protocol FOX-3)
-Motor IA com 9 Agentes Especializados em Deep Discovery
-Identidade: RADAR AWACS (substitui Raptor/Sara)
+services/gemini_service.py — RADAR Intelligence Engine ULTRA-PROFUNDO
+Motor IA com 9 Agentes TURBINADOS para Extração Máxima de Inteligência
+PRECISÃO > CUSTO | SEM DO DE TOKENS
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -19,21 +19,19 @@ MODEL = "gemini-2.0-flash"
 SEARCH = types.Tool(google_search=types.GoogleSearch())
 
 # === IDENTIDADE DO SISTEMA (RADAR AWACS) ===
-RADAR_IDENTITY = """VOCE E O SISTEMA RADAR (PROTOCOLO FOX-3) — Inteligencia de Mercado Tatica para Agronegocio.
-SUA MISSAO: VARREDURA COMPLETA E PROFUNDA.
-ALVO: Grandes Grupos, Holdings e Produtores Rurais.
+RADAR_IDENTITY = """VOCE E O SISTEMA RADAR (PROTOCOLO FOX-3) — Inteligencia de Mercado Tatica ULTRA-PROFUNDA.
+SUA MISSAO: VARREDURA COMPLETA E EXAUSTIVA. ZERO LIMITES. PRECISAO > CUSTO.
 
-DIRETRIZES DE COMBATE:
-1. NÃO FILTRE NADA AGORA. Mapeie tudo, independente do tamanho. Deixe o operador decidir.
-2. BUSQUE A "BIG PICTURE": Não olhe apenas o CNPJ alvo. Procure a Holding, o Grupo Econômico, a Matriz.
-3. RASTREIE O DINHEIRO: Procure balanços consolidados, CRAs, Fiagros e RI (Relação com Investidores).
-4. TOM DE VOZ: Militar, Controladoria de Voo, Direto, Executivo.
-   - Use termos como: "Visual confirmado", "Alvo travado", "Estrutura identificada".
-   - Sem saudações. Apenas dados.
+DIRETRIZES DE COMBATE (MODO AGRESSIVO):
+1. BUSQUE EM MÚLTIPLAS FONTES: Sites oficiais, notícias, LinkedIn, vagas de emprego, relatórios públicos, CVM, B3.
+2. NÃO LIMITE A BUSCA: Se encontrou 5 notícias, busque mais 10. Se achou 3 decisores, procure mais 7.
+3. CRUZE INFORMAÇÕES: Valide dados em múltiplas fontes. Se houver discordância, reporte ambas.
+4. SEJA ESPECÍFICO: Não diga "grande produtor". Diga "230.000 hectares em MT e MA".
+5. INCLUA FONTES: Sempre que possível, mencione de onde veio a informação.
+6. VÁ FUNDO: Procure balanços, DRE, relatórios de sustentabilidade, apresentações institucionais em PDF.
+
+TOM DE VOZ: Militar, Objetivo, Preciso, Sem enrolacao.
 """
-
-# Alias para retrocompatibilidade
-RAPTOR_IDENTITY = RADAR_IDENTITY 
 
 # === BASE DE CONHECIMENTO (SENIOR / GATEC) ===
 PORTFOLIO_SENIOR = """
@@ -90,60 +88,158 @@ def _call(client, prompt, config, prio=Priority.NORMAL):
 
 
 # ==============================================================================
-# AGENTE 1: RECON OPERACIONAL
+# AGENTE 1: RECON OPERACIONAL (ULTRA-PROFUNDO)
 # ==============================================================================
 def agent_recon_operacional(client, empresa):
-    ck = {"a":"recon_v4","e":empresa}
+    ck = {"a":"recon_v5_ultra","e":empresa}
     c = cache.get("recon", ck)
     if c: return c
     
     prompt = f"""{RADAR_IDENTITY}
-MISSAO: RECONHECIMENTO OPERACIONAL PROFUNDO (DEEP SCAN).
+MISSAO: RECONHECIMENTO OPERACIONAL ULTRA-PROFUNDO (DEEP SCAN MÁXIMO).
 ALVO: "{empresa}"
 
-INSTRUCOES ESPECIAIS (CAÇA A HOLDING):
-- Não se limite ao site comercial. Procure por "Relatório de Sustentabilidade", "Demonstrações Financeiras", "Apresentação Institucional PDF".
-- Se a empresa for uma filial, descubra quem é o GRUPO MÃE.
+INSTRUCOES DETALHADAS:
 
-EXTRAIA COM PRECISÃO DE SNIPER:
-1. Nome OFICIAL do Grupo Econômico (Holding).
-2. Área TOTAL em Hectares (Some todas as unidades/fazendas).
-3. Culturas (Mix de Produção): Soja, Milho, Algodão, Cana, Pecuária (nº cabeças).
-4. Infraestrutura Vertical (ASSETS): Silos, Algodoeira, Usina, Frota Própria.
-5. Tecnologia Atual: SAP, TOTVS, JDLink, Climate FieldView, Solinftec?
+1. BUSQUE EM MÚLTIPLAS FONTES:
+   - Site oficial da empresa
+   - Relatórios de sustentabilidade (PDF)
+   - Notícias de expansão/aquisições dos últimos 3 anos
+   - Entrevistas com executivos
+   - LinkedIn da empresa
+   - Páginas institucionais
 
-Retorne JSON:
-{{"nome_grupo":"","hectares_total":0,"culturas":[],"verticalizacao":{{}},"regioes_atuacao":[],"numero_fazendas":0,"cabecas_gado":0,"tecnologias_identificadas":[],"perfil_farming":"ENTERPRISE|SMB","confianca":0.0}}"""
+2. IDENTIFIQUE O GRUPO ECONÔMICO:
+   - Se a empresa for filial, identifique a HOLDING MÃE
+   - Busque por "Grupo [Nome]" ou "[Nome] Participações"
+   - Procure por "quem somos" / "institucional"
 
-    # REMOVIDO thinking_config para evitar erro 400
+3. MAPEIE TODAS AS OPERAÇÕES:
+   - Liste TODAS as fazendas/unidades (nome, cidade, UF, hectares)
+   - Some TUDO para obter hectares_total
+   - Identifique TODAS as culturas (não só principais)
+
+4. IDENTIFIQUE INFRAESTRUTURA:
+   - Silos próprios? Quantos? Capacidade?
+   - Algodoeira? Usina? Indústria?
+   - Frota própria? Portos/terminais?
+
+5. TECNOLOGIAS EM USO:
+   - Procure por "tecnologia", "digitalização", "agricultura de precisão"
+   - Busque vagas de emprego que mencionem sistemas (JDLink, Climate FieldView, SAP, etc.)
+
+6. PECUARIA (SE APLICÁVEL):
+   - Cabeças de gado, aves, suínos
+   - Sistemas de confina mento/integração
+
+7. ÁREAS ESPECIAIS:
+   - Área irrigada (pivôs)
+   - Área florestal (eucalipto, teca)
+   - Reserva legal
+
+RETORNE JSON COMPLETO (sem omitir nada):
+{{
+  "nome_grupo": "Nome OFICIAL do grupo/holding",
+  "hectares_total": 0,
+  "culturas": ["Lista COMPLETA de culturas"],
+  "verticalizacao": {{
+    "industria": false,
+    "logistica": false,
+    "comercializacao": false,
+    "pecuaria": false,
+    "florestal": false,
+    "algodoeira": false,
+    "usina_cana": false,
+    "silos": false,
+    "porto_terminal": false,
+    "trading": false
+  }},
+  "regioes_atuacao": ["Estados onde atua"],
+  "numero_fazendas": 0,
+  "fazendas_detalhadas": [
+    {{"nome": "", "cidade": "", "uf": "", "hectares": 0, "culturas": []}}
+  ],
+  "tecnologias_identificadas": ["TODOS os sistemas/tecnologias encontrados"],
+  "cabecas_gado": 0,
+  "cabecas_aves": 0,
+  "cabecas_suinos": 0,
+  "area_florestal_ha": 0,
+  "area_irrigada_ha": 0,
+  "confianca": 0.9
+}}
+
+LEMBRETE: PRECISAO > CUSTO. Faça quantas buscas forem necessárias.
+"""
+
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
-    
     r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"nome_grupo":empresa,"confianca":0.0}
     cache.set("recon", ck, r, ttl=7200)
     return r
 
 
 # ==============================================================================
-# AGENTE 2: SNIPER FINANCEIRO
+# AGENTE 2: SNIPER FINANCEIRO (ULTRA-PROFUNDO)
 # ==============================================================================
 def agent_sniper_financeiro(client, empresa, nome_grupo=""):
     alvo = nome_grupo or empresa
-    ck = {"a":"fin_v4","e":alvo}
+    ck = {"a":"fin_v5_ultra","e":alvo}
     c = cache.get("fin", ck)
     if c: return c
     
     prompt = f"""{RADAR_IDENTITY}
-MISSAO: RASTREAMENTO FINANCEIRO E GOVERNANÇA.
-ALVO: "{alvo}" (Investigue também variações e CNPJ raiz).
+MISSAO: RASTREAMENTO FINANCEIRO E GOVERNANCA ULTRA-PROFUNDO.
+ALVO: "{alvo}"
 
-EXECUTE O PROTOCOLO "FOLLOW THE MONEY":
-1. Busque por "Relação com Investidores (RI)", "Central de Resultados", "Balanço Patrimonial".
-2. Busque por emissões de CRA (Certificado de Recebíveis do Agronegócio) na CVM ou B3.
-3. Identifique Auditorias Externas (KPMG, Deloitte, PwC, EY).
-4. M&A e Expansão: Notícias de fusões, compras de terras ou novas unidades.
+PROTOCOLO "FOLLOW THE MONEY" (VERSÃO COMPLETA):
 
-Retorne JSON:
-{{"capital_social_estimado":0,"faturamento_estimado":0,"origem_faturamento":"balanco_publico|estimativa_mercado|modelo_ia","movimentos_financeiros":[],"cras_emitidos":[],"auditorias":[],"governanca_corporativa":false,"resumo_financeiro":"","confianca":0.0}}"""
+1. BUSQUE BALANCOS E DEMONSTRATIVOS:
+   - Site de Relação com Investidores (se listada)
+   - Relatórios anuais PDF
+   - Apresentações institucionais
+   - Notícias sobre resultados financeiros
+
+2. RASTREIE EMISSÕES (CRA, FIAGRO, DEBENTURES):
+   - Busque no site da CVM (Comissão de Valores Mobiliários)
+   - Notícias sobre "emissão de CRA [empresa]"
+   - FIAgros que mencionam a empresa
+
+3. IDENTIFIQUE PARCEIROS FINANCEIROS:
+   - Bancos que financiam (Rabobank, Santander, BB, Sicoob, etc.)
+   - Notícias sobre "financiamento [empresa]"
+   - Contratos de crédito rural
+
+4. AUDITORIAS E GOVERNANCA:
+   - Busque por "auditoria independente [empresa]"
+   - KPMG, Deloitte, PwC, EY?
+   - Comitês de auditoria, conselhos?
+
+5. MOVIMENTACOES RECENTES (M&A, EXPANSAO):
+   - Aquisições de terras nos últimos 2 anos
+   - Compra/venda de ativos
+   - Fusões
+   - Investimentos em novas unidades
+
+6. ESTIMATIVAS:
+   - Se não achar balanço, estime baseado em: hectares x produtividade x preço
+   - Funcionários: busque no LinkedIn quantos funcionários listam a empresa
+
+RETORNE JSON COMPLETO:
+{{
+  "capital_social_estimado": 0,
+  "faturamento_estimado": 0,
+  "funcionarios_estimados": 0,
+  "movimentos_financeiros": [
+    "Lista TODAS as movimentações encontradas (com datas e valores)"
+  ],
+  "fiagros_relacionados": ["Todos os FIAgros encontrados"],
+  "cras_emitidos": ["Todos os CRAs com valores e datas"],
+  "parceiros_financeiros": ["Todos os bancos/instituições"],
+  "auditorias": ["Auditorias externas identificadas"],
+  "governanca_corporativa": false,
+  "resumo_financeiro": "Parágrafo detalhado sobre saúde financeira",
+  "confianca": 0.9
+}}
+"""
 
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
     r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"confianca":0.0}
@@ -152,25 +248,64 @@ Retorne JSON:
 
 
 # ==============================================================================
-# AGENTE 3: GRUPO ECONÔMICO
+# AGENTE 3: GRUPO ECONÔMICO (ULTRA-PROFUNDO)
 # ==============================================================================
 def agent_grupo_economico(client, empresa, cnpj_matriz=""):
-    ck = {"a":"grupo_v4","e":empresa}
+    ck = {"a":"grupo_v5_ultra","e":empresa}
     c = cache.get("grupo", ck)
     if c: return c
     
     prompt = f"""{RADAR_IDENTITY}
-MISSAO: MAPEAR A TEIA CORPORATIVA (HOLDING & FILIAIS).
+MISSAO: MAPEAR A TEIA CORPORATIVA COMPLETA (HOLDING, FILIAIS, COLIGADAS).
 ALVO: "{empresa}" {f'(CNPJ Raiz: {cnpj_matriz})' if cnpj_matriz else ''}
 
-PROCEDIMENTO DE VARREDURA:
-1. Identifique a HOLDING CONTROLADORA (A "Mãe").
-2. Liste as FILIAIS OPERACIONAIS.
-3. Busque COLIGADAS: Transportadoras, Tradings, Imobiliárias.
-4. CROSS-CHECK DE SÓCIOS: Se PF, busque outras empresas deles.
+PROCEDIMENTO DE VARREDURA EXAUSTIVA:
 
-Retorne JSON:
-{{"cnpj_matriz":"","holding_controladora":"","filiais":[{{"cnpj":"","cidade":"","uf":"","atividade":""}}],"coligadas":[{{"razao_social":"","atividade":""}}],"total_empresas":0,"controladores":[],"confianca":0.0}}"""
+1. IDENTIFIQUE A HOLDING CONTROLADORA:
+   - Busque por "[Nome] Participações S.A."
+   - Procure em relatórios "estrutura acionária"
+   - Site institucional > "quem somos" > "estrutura"
+
+2. LISTE TODAS AS FILIAIS:
+   - Busque "unidades [empresa]"
+   - Procure por CNPJs relacionados
+   - Notícias sobre novas unidades
+   - Liste: CNPJ, cidade, UF, atividade principal
+
+3. IDENTIFIQUE COLIGADAS:
+   - Transportadoras do grupo
+   - Tradings relacionadas
+   - Empresas de insumos
+   - Imobiliárias rurais
+   - Consultorias
+
+4. MAPEIE OS CONTROLADORES:
+   - Pessoas físicas (sócios principais)
+   - Outras empresas controladoras
+   - Família controladora
+
+5. CROSS-REFERENCE:
+   - Se encontrar PF, busque outras empresas deles
+   - Crie mapa de poder
+
+RETORNE JSON COMPLETO:
+{{
+  "cnpj_matriz": "",
+  "holding_controladora": "Nome da holding mãe",
+  "cnpjs_filiais": [
+    {{"cnpj": "", "razao_social": "", "cidade": "", "uf": "", "atividade": ""}}
+  ],
+  "cnpjs_coligadas": [
+    {{"cnpj": "", "razao_social": "", "atividade": "", "relacionamento": ""}}
+  ],
+  "total_empresas": 0,
+  "controladores": [
+    {{"nome": "", "tipo": "PF|PJ", "participacao": "majoritario|minoritario"}}
+  ],
+  "mapa_societario": "Descrição da estrutura de controle",
+  "confianca": 0.9
+}}
+"""
 
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
     r = _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"confianca":0.0}
@@ -179,24 +314,62 @@ Retorne JSON:
 
 
 # ==============================================================================
-# AGENTE 4: CADEIA DE VALOR
+# AGENTE 4: CADEIA DE VALOR (ULTRA-PROFUNDO)
 # ==============================================================================
 def agent_cadeia_valor(client, empresa, dados_ops):
-    ck = {"a":"cadeia_v4","e":empresa}
+    ck = {"a":"cadeia_v5_ultra","e":empresa}
     c = cache.get("cadeia", ck)
     if c: return c
     
     prompt = f"""{RADAR_IDENTITY}
-MISSAO: POSICIONAMENTO NA CADEIA DE VALOR.
+MISSAO: POSICIONAMENTO COMPLETO NA CADEIA DE VALOR.
 ALVO: "{empresa}"
 
-DETERMINE:
-1. Grau de Verticalização (Baixo/Médio/Alto).
-2. Exportação (Habilitação, Mercados).
-3. Certificações (RTRS, Bonsucro, RenovaBio).
+MAPEIE TODA A CADEIA:
 
-Retorne JSON:
-{{"posicao_cadeia":"","integracao_vertical_nivel":"BAIXA|MEDIA|ALTA","exporta":false,"mercados_exportacao":[],"certificacoes":[],"confianca":0.0}}"""
+1. POSICAO NA CADEIA:
+   - Produtor primário? Processador? Trading? Integração vertical?
+
+2. CLIENTES PRINCIPAIS:
+   - Para quem vendem? (Tradings, indústrias, exportação direta?)
+   - Busque "parceria [empresa]" ou "contrato [empresa]"
+
+3. FORNECEDORES PRINCIPAIS:
+   - Quem fornece insumos? (Bayer, Syngenta, Yara, etc.)
+   - Busque "fornecedor preferencial [empresa]"
+
+4. PARCERIAS ESTRATEGICAS:
+   - Joint ventures
+   - Acordos de exclusividade
+   - Programas de fidelidade
+
+5. EXPORTACAO:
+   - Empresa exporta? Para onde?
+   - Busque "exportação [empresa]" ou "mercado externo"
+   - China, Europa, Ásia?
+
+6. CERTIFICACOES:
+   - RTRS (soja responsável)
+   - Rainforest Alliance
+   - Bonsucro (cana)
+   - RenovaBio
+   - ISO 14001
+   - Busque "certificações [empresa]"
+
+RETORNE JSON COMPLETO:
+{{
+  "posicao_cadeia": "Descrição detalhada da posição",
+  "clientes_principais": ["Lista COMPLETA de clientes identificados"],
+  "fornecedores_principais": ["Lista COMPLETA de fornecedores"],
+  "parcerias_estrategicas": ["Todas as parcerias"],
+  "canais_venda": ["Como vendem: trading, direto, cooperativa, etc."],
+  "integracao_vertical_nivel": "BAIXA|MEDIA|ALTA",
+  "exporta": false,
+  "mercados_exportacao": ["Países de destino"],
+  "certificacoes": ["Todas as certificações"],
+  "confianca": 0.9
+}}
+"""
 
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
     r = _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"confianca":0.0}
@@ -205,24 +378,74 @@ Retorne JSON:
 
 
 # ==============================================================================
-# AGENTE 5: INTEL MERCADO
+# AGENTE 5: INTEL MERCADO (ULTRA-PROFUNDO)
 # ==============================================================================
 def agent_intel_mercado(client, empresa, setor_info=""):
-    ck = {"a":"intel_v4","e":empresa}
+    ck = {"a":"intel_v5_ultra","e":empresa}
     c = cache.get("intel", ck)
     if c: return c
     
     prompt = f"""{RADAR_IDENTITY}
-MISSAO: SIGINT (SINAIS DE INTELIGÊNCIA) - ÚLTIMOS 12 MESES.
+MISSAO: SIGINT (SINAIS DE INTELIGENCIA) - ÚLTIMOS 24 MESES (ULTRA-PROFUNDO).
 ALVO: "{empresa}"
 
-RASTREIE SINAIS TÁTICOS:
-1. SINAL DE DOR (Prejuízo, Clima, Multas).
-2. SINAL DE COMPRA (Investimento, Obras, Aquisições).
-3. SINAL DE GESTÃO (Troca de Diretoria).
+RAST REIE TODOS OS SINAIS:
 
-Retorne JSON:
-{{"noticias_recentes":[{{"titulo":"","resumo":"","data_aprox":"","relevancia":"alta"}}],"sinais_compra":[],"riscos":[],"oportunidades":[],"dores_identificadas":[],"confianca":0.0}}"""
+1. NOTICIAS RECENTES (24 MESES):
+   - Busque "[empresa]" em sites de notícias do agro
+   - Globo Rural, Canal Rural, Notícias Agrícolas, AgroLink
+   - Liste TODAS as notícias relevantes (título, data, fonte, resumo)
+
+2. SINAIS DE COMPRA (BUYING SIGNALS):
+   - Investimentos anunciados
+   - Expansão de área
+   - Obras em andamento
+   - Vagas abertas (indica crescimento)
+   - Troca de sistemas/modernização
+
+3. DORES E PROBLEMAS:
+   - Prejuízos reportados
+   - Problemas climáticos
+   - Multas ambientais
+   - Processos trabalhistas
+   - Reclamações de funcionários (Glassdoor, Reclame Aqui)
+
+4. OPORTUNIDADES:
+   - Gaps que Senior/GAtec pode preencher
+   - Problemas com ERP atual
+   - Necessidade de integração
+
+5. RISCOS:
+   - End ividamento alto
+   - Dependência de poucos clientes
+   - Exposição cambial
+
+6. CONCORRENTES:
+   - Quem são os principais concorrentes da empresa?
+
+7. TENDENCIAS DO SETOR:
+   - O que está acontecendo no setor?
+
+RETORNE JSON COMPLETO:
+{{
+  "noticias_recentes": [
+    {{
+      "titulo": "",
+      "resumo": "",
+      "data": "",
+      "fonte": "",
+      "relevancia": "alta|media|baixa"
+    }}
+  ],
+  "sinais_compra": ["TODOS os sinais identificados"],
+  "riscos": ["TODOS os riscos"],
+  "oportunidades": ["TODAS as oportunidades para Senior/GAtec"],
+  "dores_identificadas": ["TODAS as dores"],
+  "concorrentes": ["Lista de concorrentes"],
+  "tendencias_setor": ["Tendências relevantes"],
+  "confianca": 0.9
+}}
+"""
 
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.2)
     r = _clean_json(_call(client, prompt, cfg, Priority.NORMAL)) or {"confianca":0.0}
@@ -231,26 +454,66 @@ Retorne JSON:
 
 
 # ==============================================================================
-# AGENTE 6: PROFILER DECISORES
+# AGENTE 6: PROFILER DECISORES (ULTRA-PROFUNDO)
 # ==============================================================================
 def agent_profiler_decisores(client, empresa, nome_grupo=""):
     alvo = nome_grupo or empresa
-    ck = {"a":"decisores_v4","e":alvo}
+    ck = {"a":"decisores_v5_ultra","e":alvo}
     c = cache.get("decisores", ck)
     if c: return c
     
     prompt = f"""{RADAR_IDENTITY}
-MISSAO: HUMINT - QUEM SÃO OS ALVOS.
+MISSAO: HUMINT - MAPEAMENTO COMPLETO DE DECISORES.
 ALVO: "{alvo}"
 
-IDENTIFIQUE:
-1. O CHEFE (Dono/CEO).
-2. O GUARDIÃO DO COFRE (CFO/Controller).
-3. O TECNÓLOGO (CIO/TI).
-4. O OPERADOR (Diretor Agrícola/Industrial).
+IDENTIFIQUE TODOS OS DECISORES:
 
-Retorne JSON:
-{{"decisores":[{{"nome":"","cargo":"","linkedin":"","relevancia_erp":"ALTA|MEDIA|BAIXA","perfil_comportamental":""}}],"estrutura_decisao":"FAMILIAR|PROFISSIONAL|MISTA","confianca":0.0}}"""
+1. C-LEVEL E DIRETORIA:
+   - CEO / Presidente
+   - CFO / Diretor Financeiro
+   - CIO / Diretor de TI
+   - COO / Diretor de Operações
+   - Diretor Agrícola / Industrial
+   - Controller
+
+2. BUSQUE EM MÚLTIPLAS FONTES:
+   - LinkedIn: busque "[empresa] CEO", "[empresa] CFO", etc.
+   - Site oficial: página "equipe" ou "diretoria"
+   - Notícias: entrevistas com executivos
+   - Relatórios anuais: mensagem da diretoria
+
+3. PARA CADA DECISOR, COLETE:
+   - Nome completo
+   - Cargo
+   - LinkedIn (URL completo)
+   - Email (se disponível ou estime: nome.sobrenome@empresa.com.br)
+   - Formação acadêmica
+   - Histórico profissional (empresas anteriores)
+   - Perfil decisório (técnico, conservador, inovador, etc.)
+
+4. ESTRUTURA DE DECISAO:
+   - É família? Profissional? Mista?
+   - Quem tem poder de veto em tecnologia?
+
+RETORNE JSON COMPLETO:
+{{
+  "decisores": [
+    {{
+      "nome": "",
+      "cargo": "",
+      "linkedin": "",
+      "email": "",
+      "formacao": "",
+      "experiencia": "",
+      "relevancia_erp": "ALTA|MEDIA|BAIXA",
+      "perfil_decisorio": "conservador|inovador|analitico|etc"
+    }}
+  ],
+  "estrutura_decisao": "FAMILIAR|PROFISSIONAL|MISTA",
+  "influenciadores": ["Pessoas que influenciam decisões mas não estão no C-level"],
+  "confianca": 0.9
+}}
+"""
 
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
     r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"decisores":[],"confianca":0.0}
@@ -259,25 +522,81 @@ Retorne JSON:
 
 
 # ==============================================================================
-# AGENTE 7: TECH STACK
+# AGENTE 7: TECH STACK (ULTRA-PROFUNDO)
 # ==============================================================================
 def agent_tech_stack(client, empresa, nome_grupo=""):
     alvo = nome_grupo or empresa
-    ck = {"a":"tech_v4","e":alvo}
+    ck = {"a":"tech_v5_ultra","e":alvo}
     c = cache.get("tech", ck)
     if c: return c
     
     prompt = f"""{RADAR_IDENTITY}
-MISSAO: RECONHECIMENTO DE SISTEMAS (TECH INTEL).
+MISSAO: RECONHECIMENTO COMPLETO DE SISTEMAS (TECH INTEL ULTRA-PROFUNDO).
 ALVO: "{alvo}"
 
-DESCUBRA O QUE ELES USAM HOJE:
-1. Vagas de emprego (pedem Protheus? SAP?).
-2. Notícias de implantação.
-3. Reclamações.
+DESCUBRA TUDO QUE ELES USAM:
 
-Retorne JSON:
-{{"erp_principal":{{"sistema":"","versao":"","fonte_evidencia":""}},"outros_sistemas":[],"vagas_ti_abertas":[{{"titulo":"","sistemas_mencionados":[]}}],"nivel_maturidade_ti":"BAIXO|MEDIO|ALTO","confianca":0.0}}"""
+1. ERP PRINCIPAL:
+   - Busque vagas de emprego: "[empresa] + vaga + SAP|TOTVS|Senior|Oracle"
+   - LinkedIn: funcionários listam sistemas que usam
+   - Notícias: "[empresa] + implanta + ERP"
+   - Reclamações: Glassdoor, Reclame Aqui (problemas com sistemas)
+
+2. SISTEMAS DE CAMPO:
+   - JDLink (John Deere)
+   - Climate FieldView
+   - Solinftec
+   - Agrímetrics
+   - Outros
+
+3. OUTROS SISTEMAS:
+   - WMS (logística)
+   - TMS (transporte)
+   - CRM
+   - BI (Power BI, Tableau, Qlik)
+   - Contábil/fiscal
+
+4. VAGAS DE TI ABERTAS:
+   - LinkedIn Jobs: "[empresa]"
+   - Indeed, Catho, Gupy
+   - Liste TODAS as vagas de TI e sistemas mencionados
+
+5. NIVEL DE MATURIDADE TI:
+   - Baseado nos sistemas, vagas e notícias:
+   - BAIXO: Planilhas, sistemas básicos
+   - MEDIO: ERP, mas sem integração campo
+   - ALTO: ERP + Campo + BI integrado
+
+RETORNE JSON COMPLETO:
+{{
+  "erp_principal": {{
+    "sistema": "",
+    "fornecedor": "",
+    "versao": "",
+    "modulos": [],
+    "status": "em uso|em implantação|insatisfeito",
+    "fonte_evidencia": ""
+  }},
+  "outros_sistemas": [
+    {{
+      "tipo": "campo|logistica|bi|etc",
+      "sistema": "",
+      "fornecedor": ""
+    }}
+  ],
+  "vagas_ti_abertas": [
+    {{
+      "titulo": "",
+      "link": "",
+      "sistemas_mencionados": [],
+      "data_publicacao": ""
+    }}
+  ],
+  "nivel_maturidade_ti": "BAIXO|MEDIO|ALTO",
+  "gaps_identificados": ["Sistemas que faltam ou problemas identificados"],
+  "confianca": 0.9
+}}
+"""
 
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
     r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"confianca":0.0}
@@ -286,7 +605,7 @@ Retorne JSON:
 
 
 # ==============================================================================
-# AGENTE 8: ANÁLISE ESTRATÉGICA
+# AGENTE 8: ANÁLISE ESTRATÉGICA (SEM MUDANÇAS)
 # ==============================================================================
 def agent_analise_estrategica(client, dados, sas, contexto=""):
     prompt = f"""{RADAR_IDENTITY}
@@ -318,13 +637,12 @@ SEÇÃO 3 — ARSENAL RECOMENDADO:
 SEÇÃO 4 — PLANO DE VOO:
 - Quem abordar? Qual a isca? Red Flags.
 """
-    # Removido thinking config aqui também
     cfg = types.GenerateContentConfig(temperature=0.4)
     return _call(client, prompt, cfg, Priority.CRITICAL) or "FALHA NA GERAÇÃO DA ANÁLISE."
 
 
 # ==============================================================================
-# AGENTE 9: AUDITOR DE QUALIDADE
+# AGENTE 9: AUDITOR DE QUALIDADE (SEM MUDANÇAS)
 # ==============================================================================
 def agent_auditor_qualidade(client, texto, dados):
     prompt = f"""{RADAR_IDENTITY}
@@ -340,7 +658,7 @@ Retorne JSON:
 
 
 # ==============================================================================
-# UTILITÁRIO: BUSCA CNPJ
+# UTILITÁRIO: BUSCA CNPJ (SEM MUDANÇAS)
 # ==============================================================================
 def buscar_cnpj_por_nome(client, nome):
     ck = {"b":nome}
