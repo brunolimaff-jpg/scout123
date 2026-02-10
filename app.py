@@ -14,6 +14,7 @@ import json
 # Importações de serviços
 from services.gemini_service import GeminiService
 from services.dossier_orchestrator import DossierOrchestrator
+from services.cnpj_service import consultar_cnpj
 from utils.export_handler import ExportHandler
 
 # Configuração de logging
@@ -148,7 +149,7 @@ with st.sidebar:
     )
     
     # API Key (pega do secrets ou input manual)
-    api_key = st.secrets.get("GEMINI_API_KEY", "")
+    api_key = st.secrets.get("GOOGLE_API_KEY", "")
     
     if not api_key:
         api_key = st.text_input(
@@ -198,56 +199,86 @@ if disparar_fox3:
         st.error("❌ Por favor, informe a API Key do Google Gemini!")
         st.stop()
     
-    # Inicializa serviços (TODAS AS CAMADAS)
-    from services.infrastructure_layer import InfrastructureLayer
-    from services.financial_layer import FinancialLayer
-    from services.intelligence_layer import IntelligenceLayer
-    from services.market_estimator import MarketEstimator
-    
-    gemini_service = GeminiService(api_key=api_key)
-    infrastructure_layer = InfrastructureLayer(gemini_service)
-    financial_layer = FinancialLayer(gemini_service)
-    intelligence_layer = IntelligenceLayer(gemini_service)
-    market_estimator = MarketEstimator()
-    
-    orchestrator = DossierOrchestrator(
-        gemini_service,
-        infrastructure_layer,
-        financial_layer,
-        intelligence_layer,
-        market_estimator
-    )
-    
     # Limpa logs anteriores
     st.session_state.logs = []
     
     # Callback para logs em tempo real
-    def callback_log(mensagem: str):
+    def callback_log(mensagem: str, percent: int = 0):
         st.session_state.logs.append({
             "timestamp": datetime.now().strftime("%H:%M:%S"),
             "mensagem": mensagem
         })
         status_placeholder.info(f"🔄 {mensagem}")
+        if percent > 0:
+            progress_placeholder.progress(percent)
     
     # Container de logs
     with st.expander("📡 Logs de Execução (Tempo Real)", expanded=True):
         log_container = st.empty()
     
-    # Barra de progresso
-    progress_bar = progress_placeholder.progress(0)
-    
     try:
-        # Executa dossiê
         with st.spinner("🔴 **FOX-3 ATIVO** | Executando inteligência profunda..."):
+            # PASSO 1: Buscar CNPJ
+            callback_log("🔍 Consultando dados cadastrais (CNPJ)...", 5)
+            
+            cnpj_data = consultar_cnpj(cnpj_input if cnpj_input else empresa_alvo)
+            
+            if not cnpj_data:
+                st.error(f"❌ Não foi possível localizar o CNPJ de '{empresa_alvo}'")
+                st.stop()
+            
+            # Converte DadosCNPJ para dict
+            cnpj_dict = {
+                "cnpj": cnpj_data.cnpj,
+                "nome": cnpj_data.razao_social,
+                "nome_fantasia": cnpj_data.nome_fantasia,
+                "situacao": cnpj_data.situacao_cadastral,
+                "capital_social": cnpj_data.capital_social,
+                "porte": cnpj_data.porte,
+                "cnae_principal": cnpj_data.cnae_principal,
+                "municipio": cnpj_data.municipio,
+                "uf": cnpj_data.uf,
+                "qsa": cnpj_data.qsa,
+                "fonte": cnpj_data.fonte
+            }
+            
+            callback_log(f"✅ CNPJ encontrado: {cnpj_dict['nome']} ({cnpj_dict['cnpj']})", 10)
+            
+            # PASSO 2: Inicializa serviços
+            callback_log("⚙️ Inicializando camadas de inteligência...", 15)
+            
+            from services.infrastructure_layer import InfrastructureLayer
+            from services.financial_layer import FinancialLayer
+            from services.intelligence_layer import IntelligenceLayer
+            from services.market_estimator import MarketEstimator
+            
+            gemini_service = GeminiService(api_key=api_key)
+            infrastructure_layer = InfrastructureLayer(gemini_service)
+            financial_layer = FinancialLayer(gemini_service)
+            intelligence_layer = IntelligenceLayer(gemini_service)
+            market_estimator = MarketEstimator()
+            
+            orchestrator = DossierOrchestrator(
+                gemini_service,
+                infrastructure_layer,
+                financial_layer,
+                intelligence_layer,
+                market_estimator
+            )
+            
+            callback_log("✅ Camadas inicializadas", 20)
+            
+            # PASSO 3: Executa dossiê completo
+            callback_log("🚀 Iniciando geração do dossiê...", 25)
+            
             # Converte para síncrono para Streamlit
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             
             dossie_completo = loop.run_until_complete(
-                orchestrator.executar_dosier_completo(
-                    razao_social=empresa_alvo,
-                    cnpj=cnpj_input if cnpj_input else "",
-                    callback=callback_log
+                orchestrator.gerar_dossie_completo(
+                    cnpj_data=cnpj_dict,
+                    progress_callback=callback_log
                 )
             )
             
@@ -261,7 +292,7 @@ if disparar_fox3:
             for log in st.session_state.logs:
                 st.text(f"[{log['timestamp']}] {log['mensagem']}")
         
-        progress_bar.progress(100)
+        progress_placeholder.progress(100)
         status_placeholder.success("✅ **DOSSIÊ COMPLETO GERADO COM SUCESSO!**")
         st.balloons()
         
@@ -281,35 +312,21 @@ if st.session_state.dossie_completo:
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        score_sas = dossie.get('sas_score', 0)
-        tier_sas = dossie.get('sas_tier', 'N/D')
+        score_sas = dossie.get('score_sas', 0)
+        tier_sas = dossie.get('classificacao', 'N/D')
         st.metric("Score SAS", f"{score_sas}", tier_sas)
     
     with col2:
-        area_total = dossie.get('dados_operacionais', {}).get('area_total', 0)
+        area_total = dossie.get('area_total_hectares', 0)
         st.metric("Área Total", f"{area_total:,} ha", "Mapeado")
     
     with col3:
-        faturamento = dossie.get('dados_financeiros', {}).get('faturamento_estimado', 'N/D')
+        faturamento = dossie.get('faturamento', 'N/D')
         st.metric("Faturamento", faturamento, "CRA/Auditado")
     
     with col4:
-        erp = dossie.get('tech_stack', {}).get('erp_principal', 'N/D')
+        erp = dossie.get('erp_atual', 'N/D')
         st.metric("ERP Atual", erp, "Identificado")
-    
-    # ========== ALERTAS CRÍTICOS ==========
-    validacoes = dossie.get('validacoes_criticas', {})
-    alertas = validacoes.get('alertas', [])
-    
-    if alertas:
-        st.markdown("---")
-        st.markdown("## ⚠️ Alertas Críticos")
-        
-        for alerta in alertas:
-            with st.expander(f"🚨 [{alerta.get('tipo', 'ALERTA')}] - Severidade: {alerta.get('severidade', 'ALTA')}", expanded=True):
-                st.warning(f"**Mensagem:** {alerta.get('mensagem', 'N/D')}")
-                st.info(f"**Causa Possível:** {alerta.get('causa_possivel', 'N/D')}")
-                st.success(f"**Ação Recomendada:** {alerta.get('acao', 'N/D')}")
     
     # ========== CAMADA 1: INFRAESTRUTURA ==========
     st.markdown("---")
@@ -318,38 +335,36 @@ if st.session_state.dossie_completo:
     tab1, tab2, tab3 = st.tabs(["🌍 SIGEF/CAR", "🚜 Maquinário", "📡 Conectividade"])
     
     with tab1:
-        sigef_car = dossie.get('sigef_car', {})
-        
         col_a, col_b, col_c = st.columns(3)
         with col_a:
-            st.metric("Área Total", f"{sigef_car.get('area_total_hectares', 0):,} ha")
+            st.metric("Área Total", f"{dossie.get('area_total_hectares', 0):,} ha")
         with col_b:
-            st.metric("Regularização", f"{sigef_car.get('regularizacao_percentual', 0)}%")
+            st.metric("Regularização", f"{dossie.get('regularizacao_ambiental', 0)}%")
         with col_c:
-            st.metric("Registros CAR", len(sigef_car.get('car_records', [])))
+            st.metric("Registros CAR", len(dossie.get('car_records', [])))
         
         # Tabela de propriedades
-        car_records = sigef_car.get('car_records', [])
+        car_records = dossie.get('car_records', [])
         if car_records:
             df_car = pd.DataFrame(car_records)
             st.dataframe(df_car, use_container_width=True)
     
     with tab2:
-        maquinario = dossie.get('maquinario', {})
-        frota = maquinario.get('frota_estimada_total', {})
+        frota = dossie.get('frota', {})
+        frota_total = frota.get('frota_estimada_total', {})
         
         col_a, col_b, col_c, col_d = st.columns(4)
         with col_a:
-            st.metric("Tratores", frota.get('tratores', 0))
+            st.metric("Tratores", frota_total.get('tratores', 0))
         with col_b:
-            st.metric("Colheitadeiras", frota.get('colheitadeiras', 0))
+            st.metric("Colheitadeiras", frota_total.get('colheitadeiras', 0))
         with col_c:
-            st.metric("Plantadeiras", frota.get('plantadeiras', 0))
+            st.metric("Plantadeiras", frota_total.get('plantadeiras', 0))
         with col_d:
-            st.metric("Valor Estimado", maquinario.get('valor_estimado_frota', 'N/D'))
+            st.metric("Valor Estimado", frota.get('valor_estimado_frota', 'N/D'))
         
         # Detalhamento
-        maq_confirmado = maquinario.get('maquinario_confirmado', [])
+        maq_confirmado = frota.get('maquinario_confirmado', [])
         if maq_confirmado:
             df_maq = pd.DataFrame(maq_confirmado)
             st.dataframe(df_maq, use_container_width=True)
@@ -373,185 +388,104 @@ if st.session_state.dossie_completo:
     tab1, tab2, tab3, tab4 = st.tabs(["💰 CRA/Debêntures", "🏛️ Incentivos", "🌳 Ambiental", "⚖️ Trabalhista"])
     
     with tab1:
-        cra = dossie.get('cra_debentures', {})
-        
         col_a, col_b, col_c = st.columns(3)
         with col_a:
-            st.metric("Faturamento Real", cra.get('faturamento_real', 'N/D'))
+            st.metric("Faturamento Real", dossie.get('faturamento', 'N/D'))
         with col_b:
-            st.metric("EBITDA Consolidado", cra.get('ebitda_consolidado', 'N/D'))
+            st.metric("EBITDA Consolidado", dossie.get('ebitda', 'N/D'))
         with col_c:
-            st.metric("D/EBITDA", f"{cra.get('indice_dps', 'N/D')}x")
+            st.metric("Auditor", dossie.get('auditor', 'N/D'))
         
-        emissoes = cra.get('emissoes_cra', [])
+        emissoes = dossie.get('emissoes_cra', [])
         if emissoes:
             df_cra = pd.DataFrame(emissoes)
             st.dataframe(df_cra, use_container_width=True)
     
     with tab2:
-        incentivos = dossie.get('incentivos_fiscais', {})
+        st.metric("Economia Fiscal Anual", dossie.get('economia_fiscal_anual', 'N/D'))
         
-        st.metric("Economia Fiscal Anual", incentivos.get('economia_fiscal_anual_total', 'N/D'))
-        
-        beneficios = incentivos.get('beneficios_ativos', [])
+        beneficios = dossie.get('incentivos_fiscais', [])
         if beneficios:
             df_inc = pd.DataFrame(beneficios)
             st.dataframe(df_inc, use_container_width=True)
     
     with tab3:
-        multas = dossie.get('multas_ambientais', {})
-        
-        col_a, col_b, col_c = st.columns(3)
+        col_a, col_b = st.columns(2)
         with col_a:
-            st.metric("Débitos Totais", multas.get('debitos_ambientais_total', 'N/D'))
+            st.metric("Score de Risco", dossie.get('score_risco_ambiental', 'N/D'))
         with col_b:
-            st.metric("Propriedades Embargadas", multas.get('propriedades_embargadas', 0))
-        with col_c:
-            st.metric("Score de Risco", multas.get('score_risco_ambiental', 'N/D'))
+            st.metric("Multas Ativas", len(dossie.get('multas_ambientais', [])))
         
-        multas_ativas = multas.get('multas_ativas', [])
+        multas_ativas = dossie.get('multas_ambientais', [])
         if multas_ativas:
             df_multas = pd.DataFrame(multas_ativas)
             st.dataframe(df_multas, use_container_width=True)
     
     with tab4:
-        trt = dossie.get('processos_trabalhistas', {})
-        
-        col_a, col_b, col_c = st.columns(3)
+        col_a, col_b = st.columns(2)
         with col_a:
-            st.metric("Processos Ativos", trt.get('total_processos_ativos', 0))
+            st.metric("Processos Ativos", dossie.get('processos_trabalhistas', 0))
         with col_b:
-            st.metric("Valor Reclamado", trt.get('valor_total_reclamado', 'N/D'))
-        with col_c:
-            st.metric("Em Execução", trt.get('em_execucao', 0))
-        
-        st.write(f"**Padrão Identificado:** {trt.get('padrão_identificado', 'N/D')}")
-        st.write(f"**Dor Principal:** {trt.get('dor_principal', 'N/D')}")
+            st.write(f"**Dor Principal:** {dossie.get('dor_trabalhista', 'N/D')}")
     
-    # ========== CAMADA 3: SUPPLY CHAIN ==========
+    # ========== CAMADA 3: INTELLIGENCE ==========
     st.markdown("---")
-    st.markdown("## 3️⃣ Cadeia de Suprimentos")
+    st.markdown("## 3️⃣ Inteligência Competitiva")
     
-    tab1, tab2 = st.tabs(["🚢 Exportação", "🧪 Bioinsumos"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🎯 Concorrentes", "💼 M&A", "👔 Liderança", "💻 Tech"])
     
     with tab1:
-        exportacao = dossie.get('exportacao', {})
+        st.write(f"**Posicionamento:** {dossie.get('posicionamento_mercado', 'N/D')}")
         
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.metric("Volume Exportado 2024", exportacao.get('volume_total_exportado_2024', 'N/D'))
-        with col_b:
-            st.metric("Receita Exportação", exportacao.get('receita_exportacao_2024', 'N/D'))
-        with col_c:
-            st.metric("Crescimento YoY", exportacao.get('crescimento_yoy', 'N/D'))
-        
-        exp_anos = exportacao.get('exportacoes_ultimos_3_anos', [])
-        if exp_anos:
-            df_exp = pd.DataFrame(exp_anos)
-            st.dataframe(df_exp, use_container_width=True)
+        concorrentes = dossie.get('concorrentes', [])
+        if concorrentes:
+            df_conc = pd.DataFrame(concorrentes)
+            st.dataframe(df_conc, use_container_width=True)
     
     with tab2:
-        bioinsumos = dossie.get('bioinsumos', {})
+        st.write(f"**Tendência:** {dossie.get('tendencia_expansao', 'N/D')}")
+        st.write(f"**Pipeline:** {dossie.get('pipeline_ma', 'N/D')}")
         
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.metric("Total Biofábricas", bioinsumos.get('total_biofabricas', 0))
-        with col_b:
-            st.metric("Capacidade Produção", bioinsumos.get('capacidade_producao_total', 'N/D'))
-        with col_c:
-            st.metric("Maturidade", bioinsumos.get('maturidade_bioinsumos', 'N/D'))
-        
-        biofab = bioinsumos.get('biofabricas', [])
-        if biofab:
-            df_bio = pd.DataFrame(biofab)
-            st.dataframe(df_bio, use_container_width=True)
-    
-    # ========== CAMADA 4: TECH & PESSOAS ==========
-    st.markdown("---")
-    st.markdown("## 4️⃣ Tecnologia & Pessoas")
-    
-    tab1, tab2, tab3 = st.tabs(["💻 Tech Stack", "📧 Contatos", "👥 RH"])
-    
-    with tab1:
-        tech = dossie.get('tech_stack_identificado', {})
-        stack_consol = tech.get('stack_consolidado', {})
-        
-        st.write(f"**ERP Principal:** {stack_consol.get('ERP_Principal', 'N/D')}")
-        st.write(f"**Banco de Dados:** {', '.join(stack_consol.get('Banco_Dados', []))}")
-        st.write(f"**BI/Analytics:** {', '.join(stack_consol.get('BI_Analytics', []))}")
-        st.write(f"**Cloud:** {', '.join(stack_consol.get('Cloud', []))}")
-        st.write(f"**Maturidade TI:** {tech.get('maturidade_ti', 'N/D')}")
-        
-        vagas = tech.get('vagas_ativas', [])
-        if vagas:
-            df_vagas = pd.DataFrame(vagas)
-            st.dataframe(df_vagas, use_container_width=True)
-    
-    with tab2:
-        emails = dossie.get('emails_decisores', {})
-        
-        st.metric("Contatos Validados", emails.get('total_emails_validados', 0))
-        st.write(f"**Padrão de E-mail:** {emails.get('padrao_email_identificado', 'N/D')}")
-        
-        emails_list = emails.get('emails_validos_identificados', [])
-        if emails_list:
-            df_emails = pd.DataFrame(emails_list)
-            st.dataframe(df_emails, use_container_width=True)
+        movimentos = dossie.get('movimentos_ma', [])
+        if movimentos:
+            df_ma = pd.DataFrame(movimentos)
+            st.dataframe(df_ma, use_container_width=True)
     
     with tab3:
-        funcionarios = dossie.get('estimativa_funcionarios', {})
+        st.write(f"**Cultura Organizacional:** {dossie.get('cultura_organizacional', 'N/D')}")
+        st.info(f"**💡 Dica de Abordagem:** {dossie.get('abordagem_comercial', 'N/D')}")
         
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.metric("Total Estimado", funcionarios.get('total_funcionarios_estimado', 'N/D'))
-        with col_b:
-            st.metric("Mão de Obra Direta", funcionarios.get('estimativa_mao_obra_direta', 'N/D'))
-        with col_c:
-            st.metric("Confiança", funcionarios.get('confianca', 'N/D'))
+        executivos = dossie.get('executivos', [])
+        if executivos:
+            df_exec = pd.DataFrame(executivos)
+            st.dataframe(df_exec, use_container_width=True)
+    
+    with tab4:
+        st.write(f"**ERP Atual:** {dossie.get('erp_atual', 'N/D')}")
+        st.write(f"**Maturidade Digital:** {dossie.get('maturidade_digital', 'N/D')}")
         
-        st.info(f"**Cálculo Base:** {funcionarios.get('calculo_base', 'N/D')}")
+        st.write("**Stack Tecnológico:**")
+        for tech in dossie.get('stack_tecnologico', []):
+            st.write(f"- {tech}")
+        
+        st.write("**Gaps Identificados:**")
+        for gap in dossie.get('gaps_tecnologicos', []):
+            st.write(f"- {gap}")
+        
+        st.success("**Oportunidades de Venda:**")
+        for opp in dossie.get('oportunidades_venda', []):
+            st.write(f"- {opp}")
     
-    # ========== ANÁLISE ESTRATÉGICA ==========
-    st.markdown("---")
-    st.markdown("## 🎯 Análise Estratégica")
-    
-    analise = dossie.get('analise_estrategica', {})
-    
-    with st.expander("📋 QUEM É ESTA EMPRESA?", expanded=True):
-        st.markdown(analise.get('quem_e_empresa', 'Análise indisponível'))
-    
-    with st.expander("🔥 DORES & COMPLEXIDADE", expanded=True):
-        st.markdown(analise.get('complexidade_dores', 'Análise indisponível'))
-    
-    with st.expander("🛡️ ARSENAL RECOMENDADO", expanded=True):
-        st.markdown(analise.get('arsenal_recomendado', 'Análise indisponível'))
-    
-    with st.expander("🚀 PLANO DE ATAQUE", expanded=True):
-        st.markdown(analise.get('plano_ataque', 'Análise indisponível'))
-    
-    # ========== FAMILY OFFICE ==========
-    family_office = dossie.get('family_office', {})
-    socios_est = family_office.get('socios_estrutura', [])
-    
-    if socios_est:
+    # ========== SÓCIOS ==========
+    socios = dossie.get('socios', [])
+    if socios:
         st.markdown("---")
-        st.markdown("## 🏦 Family Office")
+        st.markdown("## 👥 Quadro Societário")
         
-        st.metric("Patrimônio Total Estimado", family_office.get('patrimonio_total_estimado', 'N/D'))
-        st.metric("Capacidade Investimento/Ano", family_office.get('capacidade_investimento_family_office', 'N/D'))
-        
-        for socio in socios_est:
-            with st.expander(f"👤 {socio.get('nome', 'N/D')}"):
-                holdings = socio.get('holdings_patrimoniais', [])
-                if holdings:
-                    for hold in holdings:
-                        st.write(f"**Holding:** {hold.get('razao_social', 'N/D')}")
-                        participacoes = hold.get('participacoes', [])
-                        if participacoes:
-                            df_part = pd.DataFrame(participacoes)
-                            st.dataframe(df_part, use_container_width=True)
+        df_socios = pd.DataFrame(socios)
+        st.dataframe(df_socios, use_container_width=True)
     
-    # ========== DOWNLOADS (CORRIGIDO COM TRATAMENTO DE ERROS) ==========
+    # ========== DOWNLOADS ==========
     st.markdown("---")
     st.markdown("## 📥 Downloads")
     
@@ -629,23 +563,14 @@ else:
        - Acompanhe os logs em tempo real
     
     3. **Analise o Dossiê**:
-       - 5 camadas de inteligência estruturada
-       - Alertas críticos automáticos
+       - Infraestrutura, Financeiro, Intelligence
        - Score SAS (0-1000 pontos)
-       - Análise estratégica personalizada
+       - Classificação de potencial
     
     4. **Exporte os Resultados**:
        - PDF profissional
        - DOCX editável
        - JSON bruto
-    
-    ### 🔥 O que o FOX-3 faz:
-    
-    - ✅ **Infraestrutura:** SIGEF/CAR, frota, conectividade
-    - ✅ **Financeiro:** CRA, incentivos, multas, processos
-    - ✅ **Supply Chain:** Exportação, bioinsumos
-    - ✅ **Tech & Pessoas:** Stack, e-mails, RH
-    - ✅ **Validação:** Agente crítico, PDFs, Family Office
     
     ### ⚠️ Importante:
     
@@ -654,56 +579,6 @@ else:
     - Custo estimado: $2-5 por dossiê (tokens Gemini)
     - Dados provenientes de fontes públicas e OSINT
     """)
-    
-    st.markdown("---")
-    st.markdown("### 📚 Documentação Técnica")
-    
-    with st.expander("🏗️ Arquitetura do Sistema"):
-        st.markdown("""
-        **Pipeline de 17 Passos:**
-        
-        1. Validação CNPJ + QSA
-        2. Rastreio SIGEF/CAR
-        3. Forense de Maquinário
-        4. Análise Conectividade
-        5. Mineração CRA/Debêntures
-        6. Incentivos Fiscais
-        7. Multas Ambientais
-        8. Processos Trabalhistas
-        9. Análise de Exportação
-        10. Rastreio de Bioinsumos
-        11. Scraping de Tech Stack
-        12. Mapeamento de E-mails
-        12.5. Estimativa de Funcionários
-        13. Validação Adversária
-        14. Parsing de PDFs
-        15. Family Office
-        16. Análise Estratégica
-        17. Cálculo do Score SAS
-        """)
-    
-    with st.expander("📊 Score SAS (Senior Agriculture Score)"):
-        st.markdown("""
-        **Metodologia de Pontuação (0-1000 pontos):**
-        
-        - **Músculo (Porte):** 300 pontos
-          - Baseado em área total (hectares)
-        
-        - **Complexidade (Sofisticação):** 250 pontos
-          - Biofábricas, exportação, verticalização
-        
-        - **Gente (Gestão/Finanças):** 250 pontos
-          - Balanço auditado, processos, decisores
-        
-        - **Momento (Tech/Mercado):** 200 pontos
-          - ERP, vagas de TI, conectividade
-        
-        **Tiers:**
-        - 🔴 Diamante: 800-1000 pts
-        - 🟡 Ouro: 600-799 pts
-        - 🔵 Prata: 400-599 pts
-        - 🟤 Bronze: 0-399 pts
-        """)
 
 # ========== FOOTER ==========
 st.markdown("---")
