@@ -1,336 +1,513 @@
 """
-services/dossier_orchestrator.py — Pipeline 10 Passos v3.2 (FIXED)
+RADAR FOX-3 - Orchestrator v2.0
+Pipeline de 15 passos com 5 camadas de inteligência estruturada.
 """
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-import json, time
-from typing import Optional, Callable
 
-def _sj(lst, n=None):
-    """Safe join: converts any list items to str before joining."""
-    if not lst: return ''
-    items = lst[:n] if n else lst
-    return ', '.join(str(x) if not isinstance(x, dict) else x.get('nome', x.get('titulo', x.get('sistema', str(x)))) for x in items)
+import asyncio
+import logging
+from typing import Callable, Optional, Dict, List
+from datetime import datetime
+import json
 
-# Importações Google Gemini
-try:
-    from google import genai
-    from google.genai import types
-except ImportError:
-    import google.generativeai as genai
-    types = None
+# Importações de camadas
+from services.cnpj_service import CNPJService
+from services.infrastructure_layer import InfrastructureLayer
+from services.financial_layer import FinancialLayer
+from services.supply_chain_layer import SupplyChainLayer
+from services.tech_people_layer import TechPeopleLayer
+from services.critical_validator import CriticalValidator
+from services.family_office_layer import FamilyOfficeLayer
+from services.gemini_service import GeminiService
+from services.market_estimator import MarketEstimator
+from services.data_validator import safe_float, safe_int, safe_str
 
-from scout_types import (
-    DossieCompleto, DadosOperacionais, DadosFinanceiros, CadeiaValor,
-    GrupoEconomico, IntelMercado, SecaoAnalise, Verticalizacao, PipelineStepResult,
-)
-from services.gemini_service import (
-    agent_recon_operacional, agent_sniper_financeiro, agent_cadeia_valor,
-    agent_grupo_economico, agent_intel_mercado, agent_profiler_decisores,
-    agent_tech_stack, agent_analise_estrategica,
-    agent_auditor_qualidade, buscar_cnpj_por_nome,
-)
-from services.cnpj_service import consultar_cnpj, limpar_cnpj, validar_cnpj
-from services.market_estimator import calcular_sas
-from services.quality_gate import executar_quality_gate
-from utils.market_intelligence import enriquecer_prompt_com_contexto
+logger = logging.getLogger(__name__)
 
+class DossierOrchestrator:
+    """
+    Orquestrador central do RADAR FOX-3.
+    Executa 15 passos estruturados em 5 camadas:
+    
+    CAMADA 1: Infraestrutura (Hard Assets)
+    - SIGEF/CAR
+    - Maquinário
+    - Conectividade
+    
+    CAMADA 2: Financeira (Follow the Money)
+    - CRA/Debêntures
+    - Incentivos Fiscais
+    - Multas Ambientais
+    - Processos Trabalhistas
+    
+    CAMADA 3: Supply Chain
+    - Exportação
+    - Bioinsumos
+    
+    CAMADA 4: Tecnologia & Pessoas
+    - Tech Stack
+    - E-mails/Decisores
+    - Funcionários
+    
+    CAMADA 5: Validação Adversária
+    - Crítico
+    - PDFs
+    - Family Office
+    """
+    
+    def __init__(self, gemini_service: GeminiService):
+        self.gemini = gemini_service
+        
+        # Inicializa camadas
+        self.cnpj_service = CNPJService(gemini_service)
+        self.infra = InfrastructureLayer(gemini_service)
+        self.financial = FinancialLayer(gemini_service)
+        self.supply_chain = SupplyChainLayer(gemini_service)
+        self.tech_people = TechPeopleLayer(gemini_service)
+        self.critical = CriticalValidator(gemini_service)
+        self.family_office = FamilyOfficeLayer(gemini_service)
+        self.estimator = MarketEstimator()
+    
+    async def executar_dosier_completo(
+        self, 
+        razao_social: str, 
+        cnpj: str, 
+        callback: Optional[Callable] = None
+    ) -> Dict:
+        """
+        Pipeline completo de 15 passos.
+        
+        Args:
+            razao_social: Nome da empresa alvo
+            cnpj: CNPJ da empresa
+            callback: Função para logs de progresso
+        
+        Returns:
+            Dossiê completo estruturado
+        """
+        
+        logger.info(f"[ORCHESTRATOR] Iniciando dossiê completo para {razao_social}")
+        
+        dossie = {
+            "empresa_alvo": razao_social,
+            "cnpj": cnpj,
+            "data_geracao": datetime.now().isoformat(),
+            "versao": "2.0 - Intelligence System"
+        }
+        
+        try:
+            # ========== PASSO 1: VALIDAÇÃO CNPJ + QSA ==========
+            self._log_passo(callback, 1, "🔍 Validando CNPJ e extraindo QSA...")
+            qsa_data = await self.cnpj_service.obter_cnpj_e_qsa(cnpj)
+            dossie['dados_cadastrais'] = qsa_data
+            
+            # Extrai CPFs e nomes de sócios para uso posterior
+            cpfs_socios = [s.get('cpf', '') for s in qsa_data.get('quadro_societario', []) if s.get('cpf')]
+            nomes_socios = [s.get('nome', '') for s in qsa_data.get('quadro_societario', []) if s.get('nome')]
+            
+            logger.info(f"[QSA] {len(nomes_socios)} sócios identificados")
+            
+            # ========== CAMADA 1: INFRAESTRUTURA (Hard Assets) ==========
+            
+            # PASSO 2: SIGEF/CAR
+            self._log_passo(callback, 2, "🌍 Rastreando SIGEF/CAR (propriedades rurais)...")
+            sigef_car = await self.infra.buscar_sigef_car(razao_social, cpfs_socios)
+            dossie['sigef_car'] = sigef_car
+            
+            area_total = safe_int(sigef_car.get('area_total_hectares', 0))
+            logger.info(f"[SIGEF/CAR] {area_total:,} ha mapeados")
+            
+            # PASSO 3: MAQUINÁRIO
+            self._log_passo(callback, 3, "🚜 Forense de maquinário (frota agrícola)...")
+            maquinario = await self.infra.forense_maquinario(razao_social, cnpj)
+            dossie['maquinario'] = maquinario
+            
+            tratores = safe_int(maquinario.get('frota_estimada_total', {}).get('tratores', 0))
+            logger.info(f"[MAQUINÁRIO] ~{tratores} tratores estimados")
+            
+            # PASSO 4: CONECTIVIDADE
+            municipios = [r.get('municipio', '') for r in sigef_car.get('car_records', []) if r.get('municipio')]
+            if municipios:
+                self._log_passo(callback, 4, "📡 Analisando conectividade 4G/5G (Anatel)...")
+                coordenadas = []  # Pode ser expandido com lat/long real
+                conectividade = await self.infra.analise_conectividade(municipios, coordenadas)
+                dossie['conectividade'] = conectividade
+            else:
+                logger.warning("[CONECTIVIDADE] Sem municípios para analisar")
+                dossie['conectividade'] = {"analise_por_municipio": [], "status": "sem_dados"}
+            
+            # ========== CAMADA 2: FINANCEIRA & JURÍDICA (Follow the Money) ==========
+            
+            # PASSO 5: CRA/DEBÊNTURES
+            self._log_passo(callback, 5, "💰 Minerando CRA/Debêntures (dados auditados)...")
+            cra = await self.financial.mineracao_cra_debentures(razao_social, cnpj)
+            dossie['cra_debentures'] = cra
+            
+            faturamento_real = safe_str(cra.get('faturamento_real', 'N/D'))
+            logger.info(f"[CRA] Faturamento identificado: {faturamento_real}")
+            
+            # PASSO 6: INCENTIVOS FISCAIS
+            estados_operacao = list(set([r.get('uf', '') for r in sigef_car.get('car_records', []) if r.get('uf')]))
+            if estados_operacao:
+                self._log_passo(callback, 6, "🏛️ Rastreando incentivos fiscais (SUDAM/SUDENE)...")
+                incentivos = await self.financial.rastreio_incentivos_fiscais(cnpj, estados_operacao)
+                dossie['incentivos_fiscais'] = incentivos
+            else:
+                dossie['incentivos_fiscais'] = {"beneficios_ativos": [], "status": "sem_estados"}
+            
+            # PASSO 7: MULTAS AMBIENTAIS
+            self._log_passo(callback, 7, "🌳 Varredura de multas ambientais (Ibama/SEMA)...")
+            multas = await self.financial.varredura_multas_ambientais(cnpj, razao_social)
+            dossie['multas_ambientais'] = multas
+            
+            # PASSO 8: PROCESSOS TRABALHISTAS
+            self._log_passo(callback, 8, "⚖️ Rastreando processos trabalhistas (TRT)...")
+            trt = await self.financial.rastreio_processos_trabalhistas(cnpj, razao_social)
+            dossie['processos_trabalhistas'] = trt
+            
+            total_processos = safe_int(trt.get('total_processos_ativos', 0))
+            logger.info(f"[TRT] {total_processos} processos ativos")
+            
+            # ========== CAMADA 3: SUPPLY CHAIN ==========
+            
+            # PASSO 9: EXPORTAÇÃO
+            self._log_passo(callback, 9, "🚢 Analisando exportações (Comexstat)...")
+            exportacao = await self.supply_chain.analise_exportacao(razao_social, cnpj)
+            dossie['exportacao'] = exportacao
+            
+            # PASSO 10: BIOINSUMOS
+            self._log_passo(callback, 10, "🧪 Rastreando bioinsumos (MAPA/Biofábricas)...")
+            bioinsumos = await self.supply_chain.analise_bioinsumos(razao_social, cnpj)
+            dossie['bioinsumos'] = bioinsumos
+            
+            total_biofabricas = safe_int(bioinsumos.get('total_biofabricas', 0))
+            logger.info(f"[BIOINSUMOS] {total_biofabricas} biofábricas identificadas")
+            
+            # ========== CAMADA 4: TECNOLOGIA & PESSOAS ==========
+            
+            # PASSO 11: TECH STACK (Vagas)
+            self._log_passo(callback, 11, "💻 Scraping de tech stack (vagas de emprego)...")
+            tech_stack = await self.tech_people.scraping_vagas_tech_stack(razao_social, cnpj)
+            dossie['tech_stack_identificado'] = tech_stack
+            
+            erp_principal = safe_str(tech_stack.get('stack_consolidado', {}).get('ERP_Principal', 'N/D'))
+            logger.info(f"[TECH STACK] ERP: {erp_principal}")
+            
+            # PASSO 12: E-MAILS & DECISORES
+            self._log_passo(callback, 12, "📧 Mapeando e-mails e decisores...")
+            dominio_email = f"{razao_social.lower().replace(' ', '').replace('-', '')}.com.br"
+            emails = await self.tech_people.mapeamento_emails_e_decisores(razao_social, dominio_email)
+            dossie['emails_decisores'] = emails
+            
+            total_emails = safe_int(emails.get('total_emails_validados', 0))
+            logger.info(f"[E-MAILS] {total_emails} contatos validados")
+            
+            # PASSO 12.5: ESTIMATIVA DE FUNCIONÁRIOS
+            self._log_passo(callback, 12.5, "👥 Estimando força de trabalho...")
+            culturas = sigef_car.get('car_records', [{}])[0].get('culturas', ['Soja', 'Milho'])
+            pecuaria_ha = 0  # Pode ser extraído de CAR se disponível
+            
+            funcionarios_est = await self.tech_people.estimar_funcionarios(
+                razao_social, 
+                area_total,
+                culturas,
+                pecuaria_ha
+            )
+            dossie['estimativa_funcionarios'] = funcionarios_est
+            
+            # ========== CAMADA 5: VALIDAÇÃO ADVERSÁRIA ==========
+            
+            # PASSO 13: VALIDAÇÃO CRÍTICA
+            self._log_passo(callback, 13, "🔬 Validação adversária (agente crítico)...")
+            
+            # Consolida dados operacionais e financeiros para validação
+            dossie['dados_operacionais'] = {
+                "area_total": area_total,
+                "culturas": culturas,
+                "funcionarios_estimados": safe_int(funcionarios_est.get('total_funcionarios_estimado', 0))
+            }
+            
+            dossie['dados_financeiros'] = {
+                "faturamento_estimado": faturamento_real,
+                "ebitda_ajustado": safe_str(cra.get('ebitda_consolidado', 'N/D')),
+                "divida_total": safe_str(cra.get('indice_dps', 0)),
+                "capital_social": safe_str(qsa_data.get('capital_social', 'N/D')),
+                "total_processos_trabalhistas": total_processos,
+                "debitos_ambientais_total": safe_str(multas.get('debitos_ambientais_total', 'N/D'))
+            }
+            
+            dossie['tech_stack'] = {
+                "erp_principal": erp_principal,
+                "sistemas_campo": tech_stack.get('stack_consolidado', {}).get('Desenvolvimento', []),
+                "maturidade_ti": safe_str(tech_stack.get('maturidade_ti', 'N/D'))
+            }
+            
+            validacoes = await self.critical.validar_consistencia_dados(dossie)
+            dossie['validacoes_criticas'] = validacoes
+            
+            # PASSO 14: PARSING DE PDFs
+            self._log_passo(callback, 14, "📄 Extraindo PDFs e documentos primários...")
+            pdfs_docs = await self.critical.extrair_pdfs_documentos(razao_social)
+            dossie['documentos_primarios'] = pdfs_docs
+            
+            # PASSO 15: FAMILY OFFICE
+            if cpfs_socios and nomes_socios:
+                self._log_passo(callback, 15, "🏦 Mapeando Family Office dos sócios...")
+                family_office = await self.family_office.mapear_family_office(cpfs_socios, nomes_socios)
+                dossie['family_office'] = family_office
+            else:
+                dossie['family_office'] = {"socios_estrutura": [], "status": "sem_socios"}
+            
+            # ========== ANÁLISE ESTRATÉGICA ==========
+            self._log_passo(callback, 16, "🎯 Gerando análise estratégica...")
+            analise = await self._gerar_analise_estrategica(dossie, razao_social)
+            dossie['analise_estrategica'] = analise
+            
+            # ========== CÁLCULO DO SCORE SAS ==========
+            self._log_passo(callback, 17, "📊 Calculando Score SAS...")
+            sas_result = self._calcular_sas_score(dossie)
+            dossie['sas_score'] = sas_result.get('score', 0)
+            dossie['sas_tier'] = sas_result.get('tier', 'Bronze')
+            dossie['sas_breakdown'] = sas_result.get('breakdown', {})
+            
+            logger.info(f"[DOSSIÊ COMPLETO] Score SAS: {dossie['sas_score']} ({dossie['sas_tier']})")
+            
+            return dossie
+            
+        except Exception as e:
+            logger.error(f"[ORCHESTRATOR] Erro fatal: {e}", exc_info=True)
+            dossie['erro'] = str(e)
+            dossie['status'] = 'erro_critico'
+            return dossie
+    
+    def _log_passo(self, callback: Optional[Callable], num_passo: float, mensagem: str):
+        """Log unificado com callback."""
+        log_msg = f"[PASSO {num_passo:.1f}] {mensagem}"
+        logger.info(log_msg)
+        if callback:
+            callback(log_msg)
+    
+    async def _gerar_analise_estrategica(self, dossie: Dict, razao_social: str) -> Dict:
+        """
+        Gera análise estratégica em 4 seções baseada nas 5 camadas.
+        """
+        logger.info("[ANÁLISE ESTRATÉGICA] Sintetizando inteligência...")
+        
+        # Consolida contexto
+        area_total = safe_int(dossie.get('dados_operacionais', {}).get('area_total', 0))
+        faturamento = safe_str(dossie.get('dados_financeiros', {}).get('faturamento_estimado', 'N/D'))
+        erp = safe_str(dossie.get('tech_stack', {}).get('erp_principal', 'N/D'))
+        processos_trab = safe_int(dossie.get('processos_trabalhistas', {}).get('total_processos_ativos', 0))
+        biofabricas = safe_int(dossie.get('bioinsumos', {}).get('total_biofabricas', 0))
+        multas = safe_str(dossie.get('multas_ambientais', {}).get('debitos_ambientais_total', 'N/D'))
+        
+        prompt = f"""Você é um estrategista comercial sênior da Senior Sistemas voltado ao agronegócio.
 
-def _parse_vert(raw):
-    v = Verticalizacao()
-    vr = raw.get('verticalizacao', {})
-    if isinstance(vr, dict):
-        for campo in v.all_fields():
-            if vr.get(campo): setattr(v, campo, True)
-    return v
+ALVO: {razao_social}
 
-def _parse_ops(raw):
-    return DadosOperacionais(
-        nome_grupo=raw.get('nome_grupo',''), hectares_total=int(raw.get('hectares_total',0) or 0),
-        culturas=_to_strlist(raw.get('culturas',[])),
-        verticalizacao=_parse_vert(raw),
-        regioes_atuacao=_to_strlist(raw.get('regioes_atuacao',[])),
-        numero_fazendas=int(raw.get('numero_fazendas',0) or 0),
-        tecnologias_identificadas=_to_strlist(raw.get('tecnologias_identificadas',[])),
-        cabecas_gado=int(raw.get('cabecas_gado',0) or 0),
-        cabecas_aves=int(raw.get('cabecas_aves',0) or 0),
-        cabecas_suinos=int(raw.get('cabecas_suinos',0) or 0),
-        area_florestal_ha=int(raw.get('area_florestal_ha',0) or 0),
-        area_irrigada_ha=int(raw.get('area_irrigada_ha',0) or 0),
-        confianca=float(raw.get('confianca',0) or 0))
+INTELIGÊNCIA CONSOLIDADA:
+- Área Total: {area_total:,} ha
+- Faturamento Auditado: {faturamento}
+- ERP Atual: {erp}
+- Processos Trabalhistas: {processos_trab}
+- Biofábricas: {biofabricas}
+- Multas Ambientais: {multas}
 
-def _to_strlist(v):
-    """Force any list to list[str], handling dicts gracefully."""
-    if not v: return []
-    return [str(x) if not isinstance(x, dict) else x.get('nome', x.get('titulo', x.get('descricao', json.dumps(x, ensure_ascii=False)))) for x in v]
+GERE ANÁLISE TÁTICA EM 4 SEÇÕES:
 
-def _parse_fin(raw):
-    return DadosFinanceiros(
-        capital_social_estimado=float(raw.get('capital_social_estimado',0) or 0),
-        funcionarios_estimados=int(raw.get('funcionarios_estimados',0) or 0),
-        faturamento_estimado=float(raw.get('faturamento_estimado',0) or 0),
-        movimentos_financeiros=_to_strlist(raw.get('movimentos_financeiros',[])),
-        fiagros_relacionados=_to_strlist(raw.get('fiagros_relacionados',[])),
-        cras_emitidos=_to_strlist(raw.get('cras_emitidos',[])),
-        parceiros_financeiros=_to_strlist(raw.get('parceiros_financeiros',[])),
-        auditorias=_to_strlist(raw.get('auditorias',[])),
-        governanca_corporativa=bool(raw.get('governanca_corporativa',False)),
-        resumo_financeiro=raw.get('resumo_financeiro',''),
-        confianca=float(raw.get('confianca',0) or 0))
+1. QUEM É ESTA EMPRESA? (Reconhecimento do Alvo)
+   - Porte, sofisticação, modelo de negócio
+   - Verticalização e integração
+   - Posição de mercado
 
-def _parse_cadeia(raw):
-    return CadeiaValor(
-        posicao_cadeia=raw.get('posicao_cadeia',''),
-        clientes_principais=_to_strlist(raw.get('clientes_principais',[])),
-        fornecedores_principais=_to_strlist(raw.get('fornecedores_principais',[])),
-        parcerias_estrategicas=_to_strlist(raw.get('parcerias_estrategicas',[])),
-        canais_venda=_to_strlist(raw.get('canais_venda',[])),
-        integracao_vertical_nivel=raw.get('integracao_vertical_nivel',''),
-        exporta=bool(raw.get('exporta',False)),
-        mercados_exportacao=_to_strlist(raw.get('mercados_exportacao',[])),
-        certificacoes=_to_strlist(raw.get('certificacoes',[])),
-        confianca=float(raw.get('confianca',0) or 0))
+2. DORES & COMPLEXIDADE
+   - Problemas operacionais identificados
+   - Gargalos tecnológicos
+   - Riscos (trabalhistas, ambientais, financeiros)
+   - Áreas críticas de melhoria
 
-def _parse_grupo(raw):
-    ctrls_raw = raw.get('controladores', []) or []
-    ctrls = []
-    for c in ctrls_raw:
-        if isinstance(c, dict):
-            ctrls.append(c.get('nome', c.get('razao_social', str(c))))
+3. ARSENAL RECOMENDADO (Fit com Senior/GAtec)
+   - Produtos Senior aplicáveis
+   - Módulos prioritários
+   - Valor agregado por solução
+   - ROI esperado
+
+4. PLANO DE ATAQUE
+   - Stakeholders-chave para abordagem
+   - Mensagem de valor personalizada
+   - Próximos passos táticos
+   - Timeline sugerido
+
+RETORNE JSON:
+{{
+    "quem_e_empresa": "Texto markdown de 3-5 parágrafos",
+    "complexidade_dores": "Texto markdown listando dores e evidências",
+    "arsenal_recomendado": "Texto markdown com produtos Senior + argumentação",
+    "plano_ataque": "Texto markdown com roadmap comercial passo a passo"
+}}"""
+        
+        try:
+            response = await self.gemini.call_with_retry(prompt, max_retries=3)
+            data = self._parse_json_response(response)
+            return data
+        except Exception as e:
+            logger.error(f"[ANÁLISE ESTRATÉGICA] Erro: {e}")
+            return {
+                "quem_e_empresa": "Análise indisponível",
+                "complexidade_dores": "Análise indisponível",
+                "arsenal_recomendado": "Análise indisponível",
+                "plano_ataque": "Análise indisponível"
+            }
+    
+    def _calcular_sas_score(self, dossie: Dict) -> Dict:
+        """
+        Calcula Score SAS (Senior Agriculture Score) baseado nas 5 camadas.
+        
+        Dimensões:
+        - Músculo (Porte): 300 pontos
+        - Complexidade (Sofisticação): 250 pontos
+        - Gente (Gestão/Finanças): 250 pontos
+        - Momento (Tech/Mercado): 200 pontos
+        
+        Total: 1000 pontos
+        """
+        logger.info("[SAS SCORE] Calculando...")
+        
+        score_musculo = 0
+        score_complexidade = 0
+        score_gente = 0
+        score_momento = 0
+        
+        # === MÚSCULO (Porte) - 300 pts ===
+        area_total = safe_int(dossie.get('dados_operacionais', {}).get('area_total', 0))
+        if area_total >= 200000:
+            score_musculo = 300
+        elif area_total >= 100000:
+            score_musculo = 250
+        elif area_total >= 50000:
+            score_musculo = 200
+        elif area_total >= 20000:
+            score_musculo = 150
+        elif area_total >= 10000:
+            score_musculo = 100
         else:
-            ctrls.append(str(c))
-    filiais = raw.get('filiais', []) or raw.get('cnpjs_filiais', []) or []
-    coligadas = raw.get('coligadas', []) or raw.get('cnpjs_coligadas', []) or []
-    return GrupoEconomico(
-        cnpj_matriz=raw.get('cnpj_matriz', ''),
-        cnpjs_filiais=filiais,
-        cnpjs_coligadas=coligadas,
-        total_empresas=int(raw.get('total_empresas', 0) or 0),
-        controladores=ctrls,
-        holding_controladora=raw.get('holding_controladora', ''),
-        confianca=float(raw.get('confianca', 0) or 0))
-
-def _parse_intel(raw):
-    return IntelMercado(
-        noticias_recentes=raw.get('noticias_recentes',[]) or [],
-        concorrentes=_to_strlist(raw.get('concorrentes',[])),
-        tendencias_setor=_to_strlist(raw.get('tendencias_setor',[])),
-        dores_identificadas=_to_strlist(raw.get('dores_identificadas',[])),
-        oportunidades=_to_strlist(raw.get('oportunidades',[])),
-        sinais_compra=_to_strlist(raw.get('sinais_compra',[])),
-        riscos=_to_strlist(raw.get('riscos',[])),
-        confianca=float(raw.get('confianca',0) or 0))
-
-def _parse_secoes(texto):
-    TIT = [("🏫","Quem e Esta Empresa"),("🚜","Complexidade & Dores"),("💡","Fit Senior/GAtec"),("⚔️","Plano de Ataque")]
-    secoes = []
-    for i, p in enumerate(texto.split('|||')):
-        p = p.strip()
-        if not p: continue
-        ic, t = TIT[i] if i < len(TIT) else ("📄", f"Secao {i+1}")
-        secoes.append(SecaoAnalise(titulo=t, conteudo=p, icone=ic))
-    return secoes if len(secoes) >= 2 else [SecaoAnalise(titulo="Analise Completa", conteudo=texto, icone="🧠")]
-
-
-def gerar_dossie_completo(empresa_alvo, api_key, cnpj="", log_cb=None, progress_cb=None, step_cb=None):
-    """
-    Gera dossiê completo da empresa usando pipeline de 10 passos.
+            score_musculo = 50
+        
+        # === COMPLEXIDADE (Sofisticação) - 250 pts ===
+        biofabricas = safe_int(dossie.get('bioinsumos', {}).get('total_biofabricas', 0))
+        complexidade_pts = 0
+        
+        if biofabricas >= 3:
+            complexidade_pts += 80
+        elif biofabricas >= 1:
+            complexidade_pts += 50
+        
+        # Verticalização
+        volume_exportado = safe_str(dossie.get('exportacao', {}).get('volume_total_exportado_2024', '0'))
+        if '000 ton' in volume_exportado or 'mil ton' in volume_exportado:
+            complexidade_pts += 60
+        
+        # Incentivos fiscais
+        economia_fiscal = safe_str(dossie.get('incentivos_fiscais', {}).get('economia_fiscal_anual_total', 'R$ 0'))
+        if 'milhões' in economia_fiscal or 'bilhão' in economia_fiscal:
+            complexidade_pts += 50
+        
+        # Máquinas modernas
+        tratores = safe_int(dossie.get('maquinario', {}).get('frota_estimada_total', {}).get('tratores', 0))
+        if tratores >= 100:
+            complexidade_pts += 60
+        elif tratores >= 50:
+            complexidade_pts += 40
+        
+        score_complexidade = min(complexidade_pts, 250)
+        
+        # === GENTE (Gestão/Finanças) - 250 pts ===
+        gente_pts = 0
+        
+        # Balanço auditado (CRA)
+        faturamento = safe_str(dossie.get('dados_financeiros', {}).get('faturamento_estimado', 'N/D'))
+        if faturamento != 'N/D' and 'bilhão' in faturamento.lower():
+            gente_pts += 100
+        elif faturamento != 'N/D' and 'milhões' in faturamento.lower():
+            gente_pts += 60
+        
+        # Processos trabalhistas baixos
+        processos = safe_int(dossie.get('processos_trabalhistas', {}).get('total_processos_ativos', 0))
+        if processos < 50:
+            gente_pts += 50
+        elif processos < 100:
+            gente_pts += 30
+        
+        # Multas ambientais baixas
+        multas = safe_str(dossie.get('multas_ambientais', {}).get('debitos_ambientais_total', 'N/D'))
+        if multas == 'N/D' or 'R$ 0' in multas:
+            gente_pts += 50
+        elif 'milhão' in multas:
+            gente_pts += 20
+        
+        # Decisores mapeados
+        emails = safe_int(dossie.get('emails_decisores', {}).get('total_emails_validados', 0))
+        if emails >= 20:
+            gente_pts += 50
+        elif emails >= 10:
+            gente_pts += 30
+        
+        score_gente = min(gente_pts, 250)
+        
+        # === MOMENTO (Tech/Mercado) - 200 pts ===
+        momento_pts = 0
+        
+        # ERP moderno
+        erp = safe_str(dossie.get('tech_stack', {}).get('erp_principal', 'N/D'))
+        if 'SAP' in erp or 'S/4HANA' in erp:
+            momento_pts += 100
+        elif 'Protheus' in erp or 'TOTVS' in erp:
+            momento_pts += 60
+        elif erp != 'N/D':
+            momento_pts += 40
+        
+        # Vagas de TI ativas
+        vagas = len(dossie.get('tech_stack_identificado', {}).get('vagas_ativas', []))
+        if vagas >= 5:
+            momento_pts += 50
+        elif vagas >= 2:
+            momento_pts += 30
+        
+        # Conectividade crítica
+        oportunidades_telecom = len(dossie.get('conectividade', {}).get('oportunidades_venda', []))
+        if oportunidades_telecom >= 2:
+            momento_pts += 50
+        
+        score_momento = min(momento_pts, 200)
+        
+        # === SCORE TOTAL ===
+        score_total = score_musculo + score_complexidade + score_gente + score_momento
+        
+        # === TIER ===
+        if score_total >= 800:
+            tier = "Diamante"
+        elif score_total >= 600:
+            tier = "Ouro"
+        elif score_total >= 400:
+            tier = "Prata"
+        else:
+            tier = "Bronze"
+        
+        return {
+            "score": score_total,
+            "tier": tier,
+            "breakdown": {
+                "musculo": score_musculo,
+                "complexidade": score_complexidade,
+                "gente": score_gente,
+                "momento": score_momento
+            }
+        }
     
-    Args:
-        empresa_alvo: Nome da empresa
-        api_key: Chave da API do Gemini
-        cnpj: CNPJ opcional
-        log_cb: Callback para logs (func(msg))
-        progress_cb: Callback para progresso (func(float, msg))
-        step_cb: Callback para steps (func(PipelineStepResult))
-    """
-    start = time.time()
-    
-    # Inicializa cliente Gemini CORRETAMENTE
-    try:
-        # Tenta novo SDK (google-genai)
-        client = genai.Client(api_key=api_key)
-    except (AttributeError, TypeError):
-        # Fallback para SDK antigo (google-generativeai)
-        genai.configure(api_key=api_key)
-        client = genai  # Usa o módulo diretamente
-    
-    d = DossieCompleto(empresa_alvo=empresa_alvo, cnpj=cnpj)
-    
-    def _log(m):
-        d.pipeline_log.append(m)
-        if log_cb: log_cb(m)
-    
-    def _prog(p, m):
-        if progress_cb: progress_cb(min(p, 1.0), m)
-    
-    def _step(s):
-        d.pipeline_steps.append(s)
-        if step_cb: step_cb(s)
-
-    # P1: CNPJ
-    _prog(0.03, "📋 Passo 1/10: CNPJ...")
-    t0 = time.time()
-    s1 = PipelineStepResult(1, "Consulta CNPJ", "📋", "running")
-    if cnpj and validar_cnpj(limpar_cnpj(cnpj)):
-        dc = consultar_cnpj(cnpj)
-        if dc:
-            d.dados_cnpj = dc; d.cnpj = cnpj
-            s1.status = "success"; s1.resumo = f"{dc.razao_social} | {dc.municipio}/{dc.uf}"
-            s1.detalhes = [f"CNAE: {dc.cnae_principal}", f"Capital: R${dc.capital_social:,.0f}", f"QSA: {len(dc.qsa)} socios"]
-        else: s1.status = "warning"; s1.resumo = "Nao encontrado"
-    else:
-        cf = buscar_cnpj_por_nome(client, empresa_alvo)
-        if cf:
-            dc = consultar_cnpj(cf)
-            if dc:
-                d.dados_cnpj = dc; d.cnpj = cf
-                s1.status = "success"; s1.resumo = f"IA encontrou: {cf} — {dc.razao_social}"
-            else: s1.status = "warning"; s1.resumo = f"CNPJ {cf} sem dados"
-        else: s1.status = "warning"; s1.resumo = "Nao localizado"
-    s1.tempo_segundos = time.time() - t0; _step(s1)
-
-    # P2: RECON
-    _prog(0.10, "🛰️ Passo 2/10: Recon Operacional...")
-    t0 = time.time()
-    s2 = PipelineStepResult(2, "Recon Operacional", "🛰️", "running")
-    raw_ops = agent_recon_operacional(client, empresa_alvo)
-    d.dados_operacionais = _parse_ops(raw_ops)
-    ng = d.dados_operacionais.nome_grupo or empresa_alvo
-    verts = d.dados_operacionais.verticalizacao.listar_ativos()
-    s2.status = "success"; s2.confianca = d.dados_operacionais.confianca
-    s2.resumo = f"{ng} | {d.dados_operacionais.hectares_total:,} ha | {_sj(d.dados_operacionais.culturas, 4)}"
-    s2.detalhes = [f"Fazendas: {d.dados_operacionais.numero_fazendas}", f"Regioes: {_sj(d.dados_operacionais.regioes_atuacao)}"]
-    if verts: s2.detalhes.append(f"Vert: {_sj(verts, 6)}")
-    if d.dados_operacionais.cabecas_gado: s2.detalhes.append(f"Gado: {d.dados_operacionais.cabecas_gado:,}")
-    s2.tempo_segundos = time.time() - t0; _step(s2)
-
-    # P3: FINANCEIRO
-    _prog(0.20, "💰 Passo 3/10: Sniper Financeiro...")
-    t0 = time.time()
-    s3 = PipelineStepResult(3, "Sniper Financeiro", "💰", "running")
-    raw_fin = agent_sniper_financeiro(client, empresa_alvo, ng)
-    d.dados_financeiros = _parse_fin(raw_fin)
-    fi = d.dados_financeiros
-    s3.status = "success"; s3.confianca = fi.confianca
-    s3.resumo = f"R${fi.capital_social_estimado/1e6:.1f}M | {fi.funcionarios_estimados:,} funcs | {len(fi.movimentos_financeiros)} mov"
-    s3.detalhes = [f"Fiagros: {_sj(fi.fiagros_relacionados, 2) or 'Nenhum'}",
-                   f"CRAs: {_sj(fi.cras_emitidos, 2) or 'Nenhum'}"]
-    for mv in fi.movimentos_financeiros[:2]: s3.detalhes.append(f"→ {mv[:80]}")
-    s3.tempo_segundos = time.time() - t0; _step(s3)
-
-    # P4: CADEIA DE VALOR
-    _prog(0.28, "🔗 Passo 4/10: Cadeia de Valor...")
-    t0 = time.time()
-    s4 = PipelineStepResult(4, "Cadeia de Valor", "🔗", "running")
-    raw_cad = agent_cadeia_valor(client, empresa_alvo, raw_ops)
-    d.cadeia_valor = _parse_cadeia(raw_cad)
-    cv = d.cadeia_valor
-    s4.status = "success"; s4.confianca = cv.confianca
-    s4.resumo = f"{cv.posicao_cadeia} | {cv.integracao_vertical_nivel} | Export: {'Sim' if cv.exporta else 'Nao'}"
-    s4.detalhes = [f"Clientes: {_sj(cv.clientes_principais, 3) or 'N/I'}",
-                   f"Certif: {_sj(cv.certificacoes) or 'Nenhuma'}"]
-    s4.tempo_segundos = time.time() - t0; _step(s4)
-
-    # P5: GRUPO ECONOMICO
-    _prog(0.36, "🏛️ Passo 5/10: Grupo Economico...")
-    t0 = time.time()
-    s5 = PipelineStepResult(5, "Grupo Economico", "🏛️", "running")
-    raw_grp = agent_grupo_economico(client, empresa_alvo, d.cnpj)
-    d.grupo_economico = _parse_grupo(raw_grp)
-    g = d.grupo_economico
-    s5.status = "success"; s5.confianca = g.confianca
-    nfil = len(g.cnpjs_filiais); ncol = len(g.cnpjs_coligadas)
-    s5.resumo = f"{g.total_empresas} empresas | {nfil} filiais | {ncol} coligadas"
-    s5.detalhes = [f"Controladores: {_sj(g.controladores, 3) or 'N/I'}"]
-    if g.holding_controladora: s5.detalhes.append(f"Holding: {g.holding_controladora}")
-    s5.tempo_segundos = time.time() - t0; _step(s5)
-
-    # P6: INTEL MERCADO
-    _prog(0.44, "📡 Passo 6/10: Intel de Mercado...")
-    t0 = time.time()
-    s6 = PipelineStepResult(6, "Intel de Mercado", "📡", "running")
-    cnae = d.dados_cnpj.cnae_principal if d.dados_cnpj else ""
-    uf = d.dados_cnpj.uf if d.dados_cnpj else (d.dados_operacionais.regioes_atuacao[0] if d.dados_operacionais.regioes_atuacao else "")
-    ctx = enriquecer_prompt_com_contexto(cnae, uf)
-    raw_int = agent_intel_mercado(client, empresa_alvo, ctx)
-    d.intel_mercado = _parse_intel(raw_int)
-    il = d.intel_mercado
-    s6.status = "success"; s6.confianca = il.confianca
-    s6.resumo = f"{len(il.noticias_recentes)} noticias | {len(il.sinais_compra)} sinais | {len(il.riscos)} riscos"
-    for sc in il.sinais_compra[:2]: s6.detalhes.append(f"🟢 {sc[:60]}")
-    s6.tempo_segundos = time.time() - t0; _step(s6)
-
-    # P7: PROFILER DECISORES
-    _prog(0.52, "👔 Passo 7/10: Profiler de Decisores...")
-    t0 = time.time()
-    s7 = PipelineStepResult(7, "Profiler Decisores", "👔", "running")
-    raw_dec = agent_profiler_decisores(client, empresa_alvo, ng)
-    d.decisores = raw_dec
-    decs = raw_dec.get('decisores', [])
-    s7.status = "success"; s7.confianca = raw_dec.get('confianca', 0)
-    s7.resumo = f"{len(decs)} decisores | Estrutura: {raw_dec.get('estrutura_decisao','N/I')}"
-    for dec in decs[:3]: s7.detalhes.append(f"👤 {dec.get('nome','')} — {dec.get('cargo','')}")
-    s7.tempo_segundos = time.time() - t0; _step(s7)
-
-    # P8: TECH STACK
-    _prog(0.60, "💻 Passo 8/10: Tech Stack Hunter...")
-    t0 = time.time()
-    s8 = PipelineStepResult(8, "Tech Stack", "💻", "running")
-    raw_tech = agent_tech_stack(client, empresa_alvo, ng)
-    d.tech_stack = raw_tech
-    erp_info = raw_tech.get('erp_principal', {})
-    s8.status = "success"; s8.confianca = raw_tech.get('confianca', 0)
-    s8.resumo = f"ERP: {erp_info.get('sistema','N/I')} | TI: {raw_tech.get('nivel_maturidade_ti','N/I')}"
-    for ot in raw_tech.get('outros_sistemas', [])[:3]:
-        s8.detalhes.append(f"→ {ot.get('tipo','')}: {ot.get('sistema','')}")
-    for vg in raw_tech.get('vagas_ti_abertas', [])[:2]:
-        s8.detalhes.append(f"📋 Vaga: {vg.get('titulo','')} ({_sj(vg.get('sistemas_mencionados',[]), 2)})")
-    s8.tempo_segundos = time.time() - t0; _step(s8)
-
-    # P8.5: SCORE SAS
-    _prog(0.68, "📊 Calculando Score...")
-    dados_m = d.merge_dados()
-    dados_m['decisores'] = raw_dec
-    dados_m['tech_stack'] = raw_tech
-    dados_m['grupo_economico'] = {'total_empresas': g.total_empresas}
-    dados_m['cadeia_valor'] = {'exporta': cv.exporta, 'certificacoes': cv.certificacoes}
-    dados_m['natureza_juridica'] = d.dados_cnpj.natureza_juridica if d.dados_cnpj else ''
-    dados_m['qsa_count'] = len(d.dados_cnpj.qsa) if d.dados_cnpj else 0
-    d.sas_result = calcular_sas(dados_m)
-    _log(f"Score: {d.sas_result.score}/1000 — {d.sas_result.tier.value}")
-
-    # P9: ANALISE ESTRATEGICA
-    _prog(0.72, "🧠 Passo 9/10: Analise Estrategica (Deep Thinking)...")
-    t0 = time.time()
-    s9 = PipelineStepResult(9, "Analise Estrategica", "🧠", "running")
-    dados_a = dados_m.copy()
-    dados_a['intel'] = {'noticias': il.noticias_recentes, 'sinais': il.sinais_compra,
-                        'dores': il.dores_identificadas, 'oportunidades': il.oportunidades}
-    sas_d = {'score': d.sas_result.score, 'tier': d.sas_result.tier.value, 'breakdown': d.sas_result.breakdown.to_dict()}
-    texto = agent_analise_estrategica(client, dados_a, sas_d, ctx)
-    d.analise_bruta = texto
-    d.secoes_analise = _parse_secoes(texto)
-    d.modelo_usado = "Senior Scout 360 Intelligence Platform"
-    nw = sum(len(s.conteudo.split()) for s in d.secoes_analise)
-    s9.status = "success"; s9.resumo = f"{len(d.secoes_analise)} secoes | {nw} palavras"
-    s9.tempo_segundos = time.time() - t0; _step(s9)
-
-    # P10: QUALITY GATE
-    _prog(0.90, "✅ Passo 10/10: Quality Gate...")
-    t0 = time.time()
-    s10 = PipelineStepResult(10, "Quality Gate", "✅", "running")
-    d.quality_report = executar_quality_gate(d)
-    try:
-        ai = agent_auditor_qualidade(client, texto, dados_a)
-        d.quality_report.audit_ia = ai
-        d.quality_report.recomendacoes.extend(ai.get('recomendacoes', []))
-    except Exception: pass
-    s10.status = "success"
-    s10.resumo = f"{d.quality_report.nivel.value} ({d.quality_report.score_qualidade:.0f}%)"
-    s10.tempo_segundos = time.time() - t0; _step(s10)
-
-    d.tempo_total_segundos = time.time() - start
-    d.timestamp_geracao = time.strftime("%Y-%m-%d %H:%M:%S")
-    _prog(1.0, "🎯 Dossie completo!")
-    return d
+    def _parse_json_response(self, response: str) -> Dict:
+        """Parse seguro de JSON."""
+        try:
+            clean = response.replace("```json", "").replace("```", "").strip()
+            return json.loads(clean)
+        except:
+            logger.warning("Falha ao parsear JSON de resposta")
+            return {}
