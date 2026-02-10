@@ -1,6 +1,7 @@
 """
 RADAR FOX-3 - Interface Principal
 Sistema de Inteligência de Mercado Ultra-Profundo para Agronegócio
+VERSÃO CORRIGIDA: Tratamento defensivo de imports opcionais
 """
 
 import streamlit as st
@@ -528,7 +529,7 @@ if st.session_state.dossie_completo:
                             df_part = pd.DataFrame(participacoes)
                             st.dataframe(df_part, use_container_width=True)
     
-    # ========== DOWNLOADS ==========
+    # ========== DOWNLOADS (CORRIGIDO COM TRATAMENTO DE ERROS) ==========
     st.markdown("---")
     st.markdown("## 📥 Downloads")
     
@@ -546,8 +547,11 @@ if st.session_state.dossie_completo:
                     use_container_width=True
                 )
                 st.success("✅ PDF gerado!")
+            except ImportError as e:
+                st.error(f"❌ {str(e)}")
+                st.info("💡 **Solução**: Adicione `reportlab>=4.0.0` ao requirements.txt e faça redeploy.")
             except Exception as e:
-                st.error(f"Erro ao gerar PDF: {e}")
+                st.error(f"❌ Erro ao gerar PDF: {e}")
     
     with col2:
         if st.button("📊 Gerar DOCX", use_container_width=True):
@@ -561,19 +565,26 @@ if st.session_state.dossie_completo:
                     use_container_width=True
                 )
                 st.success("✅ DOCX gerado!")
+            except ImportError as e:
+                st.error(f"❌ {str(e)}")
+                st.info("💡 **Solução**: Adicione `python-docx>=1.1.0` ao requirements.txt e faça redeploy.")
             except Exception as e:
-                st.error(f"Erro ao gerar DOCX: {e}")
+                st.error(f"❌ Erro ao gerar DOCX: {e}")
     
     with col3:
         if st.button("💾 Exportar JSON Bruto", use_container_width=True):
-            json_str = json.dumps(dossie, indent=2, ensure_ascii=False)
-            st.download_button(
-                label="⬇️ Download JSON",
-                data=json_str,
-                file_name=f"RADAR_FOX3_{empresa_alvo.replace(' ', '_')}.json",
-                mime="application/json",
-                use_container_width=True
-            )
+            try:
+                json_buffer = ExportHandler.generate_json(dossie)
+                st.download_button(
+                    label="⬇️ Download JSON",
+                    data=json_buffer,
+                    file_name=f"RADAR_FOX3_{empresa_alvo.replace(' ', '_')}.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+                st.success("✅ JSON gerado!")
+            except Exception as e:
+                st.error(f"❌ Erro ao gerar JSON: {e}")
 
 # ========== INSTRUÇÕES INICIAIS ==========
 else:
