@@ -1,6 +1,6 @@
 """
-app.py — RADAR FOX-3 v2.0 | Intelligence System
-Versão atualizada com validação robusta e ZERO falhas
+app.py — RADAR FOX-3 v2.1 | Intelligence System COMPLETO
+DOSSIÊ ULTRA-DETALHADO: Decisores, Grupo Econômico, Intel Completa, Tech Stack
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -14,12 +14,8 @@ from datetime import datetime
 try:
     from services.dossier_orchestrator import gerar_dossie_completo
     from services.cnpj_service import formatar_cnpj, validar_cnpj, limpar_cnpj
-    from services.market_estimator import calcular_sas  # USA O ATUALIZADO
-    from services.data_validator import safe_float, safe_int, safe_str  # NOVO
-    from services.cache_service import cache
-    from services.request_queue import request_queue
-    from utils.market_intelligence import ARGUMENTOS_CONCORRENCIA
-    from utils.pdf_export import gerar_pdf
+    from services.market_estimator import calcular_sas
+    from services.data_validator import safe_float, safe_int, safe_str
     from scout_types import DossieCompleto, Tier, QualityLevel
 except ImportError as e:
     st.error(f"⚠️ Erro ao importar módulos: {e}")
@@ -32,23 +28,6 @@ def _sj(lst, n=None):
     if not lst: return ''
     items = lst[:n] if n else lst
     return ', '.join(str(x) if not isinstance(x, dict) else x.get('nome', x.get('titulo', x.get('sistema', str(x)))) for x in items)
-
-def _fmt_movimento(m):
-    if isinstance(m, str):
-        if m.startswith('{'):
-            try: m = json.loads(m)
-            except: return m
-        else: return m
-    if isinstance(m, dict):
-        tipo = m.get('tipo', '')
-        valor = m.get('valor', '')
-        det = m.get('detalhes', '')
-        parts = []
-        if tipo: parts.append(f"**{tipo}**")
-        if valor and str(valor) != '0': parts.append(f"R${valor}")
-        if det: parts.append(f"— {det}")
-        return " ".join(parts) if parts else str(m)
-    return str(m)
 
 def gerar_csv_report(d):
     output = io.StringIO()
@@ -106,150 +85,42 @@ div[data-testid="stMetric"], .intel-card {
     position: relative;
 }
 
-div[data-testid="stMetric"]::before {
-    content: ''; position: absolute; top: 0; left: 0; width: 10px; height: 10px;
-    border-top: 2px solid #38BDF8; border-left: 2px solid #38BDF8;
-}
-
-div[data-testid="stMetric"]::after {
-    content: ''; position: absolute; bottom: 0; right: 0; width: 10px; height: 10px;
-    border-bottom: 2px solid #38BDF8; border-right: 2px solid #38BDF8;
-}
-
-div[data-testid="stMetric"] label { 
-    color: #64748B !important; 
-    font-family: 'JetBrains Mono'; 
-    font-size: 0.7rem !important; 
-    letter-spacing: 1px; 
-}
-
-div[data-testid="stMetric"] [data-testid="stMetricValue"] {
-    color: #38BDF8 !important;
-    font-family: 'Rajdhani', sans-serif !important;
-    font-weight: 700 !important;
-    text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
-}
-
-.stButton>button {
-    background: linear-gradient(180deg, #F59E0B, #D97706) !important;
-    color: #0F172A !important;
-    border: 1px solid #FBBF24 !important;
-    font-family: 'Rajdhani', sans-serif !important;
-    font-weight: 800 !important;
-    font-size: 1.1rem !important;
-    letter-spacing: 2px !important;
-    text-transform: uppercase !important;
-    border-radius: 4px !important;
-    animation: pulse-border 2s infinite;
-}
-
-.stButton>button:hover {
-    background: #FBBF24 !important;
-    box-shadow: 0 0 20px rgba(245, 158, 11, 0.6) !important;
-    transform: scale(1.02);
-}
-
-@keyframes pulse-border {
-    0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
-    70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
-}
-
-.stTextInput>div>div>input {
-    background-color: #0F172A !important;
-    color: #38BDF8 !important;
-    border: 1px solid #334155 !important;
-    font-family: 'JetBrains Mono', monospace !important;
-    letter-spacing: 1px;
-}
-
-.stTextInput>div>div>input:focus {
-    border-color: #38BDF8 !important;
-    box-shadow: 0 0 0 1px #38BDF8 !important;
-}
-
-.radar-header {
-    font-family: 'Rajdhani', sans-serif;
-    font-weight: 700;
-    font-size: 3rem;
-    color: #38BDF8;
-    letter-spacing: 6px;
-    margin: 0;
-    line-height: 1;
-    text-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
-}
-
-.radar-subtitle {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.7rem;
-    color: #64748B;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    margin-top: 5px;
-    border-top: 1px solid #334155;
-    padding-top: 5px;
-    width: 100%;
-}
-
 .section-header {
     font-family: 'Rajdhani', sans-serif;
-    color: #E2E8F0;
-    font-size: 1.4rem;
+    color: #38BDF8;
+    font-size: 1.6rem;
     font-weight: 700;
     text-transform: uppercase;
     border-bottom: 2px solid #334155;
     padding-bottom: 5px;
     margin-top: 30px;
     margin-bottom: 20px;
-    display: flex;
-    align-items: center;
 }
 
-.section-header::before {
-    content: '✈'; margin-right: 12px; color: #F59E0B; transform: rotate(90deg);
+.info-card {
+    background: #1E293B;
+    border-left: 4px solid #38BDF8;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 4px;
 }
 
-.status-panel {
-    background: #020617;
-    border: 1px solid #1E293B;
-    padding: 10px;
-    font-family: 'JetBrains Mono';
-    font-size: 0.7rem;
-    color: #94A3B8;
-    margin-bottom: 20px;
+.warning-card {
+    background: #1E293B;
+    border-left: 4px solid #F59E0B;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 4px;
 }
 
-.stTabs [data-baseweb="tab-list"] { gap: 2px; border-bottom: 2px solid #334155; }
-
-.stTabs [data-baseweb="tab"] {
-    background-color: #1E293B; color: #64748B; border: none; margin-right: 2px;
-    font-family: 'Rajdhani'; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+.success-card {
+    background: #1E293B;
+    border-left: 4px solid #10B981;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 4px;
 }
 
-.stTabs [aria-selected="true"] {
-    background-color: #38BDF8 !important; color: #0F172A !important;
-}
-
-.neon-divider { 
-    height: 1px; 
-    background: linear-gradient(90deg, transparent, #334155, transparent); 
-    margin: 20px 0; 
-}
-
-.kill-metric { 
-    font-family: 'Rajdhani', sans-serif; 
-    font-size: 3rem; 
-    color: #FFF; 
-    font-weight: 700; 
-    line-height: 1; 
-}
-
-.bda-card { 
-    background: #1E293B; 
-    border-left: 4px solid #F59E0B; 
-    padding: 15px; 
-    margin-bottom: 10px; 
-}
 </style>""", unsafe_allow_html=True)
 
 # Inicializa Session State
@@ -263,21 +134,11 @@ with st.sidebar:
     st.markdown("""
     <div style="text-align:center;padding:10px 0 20px 0;">
         <div style="font-size:3rem;margin-bottom:0px;">📡</div>
-        <div class="radar-header">RADAR</div>
-        <div class="radar-subtitle">
+        <div style="font-family:'Rajdhani';font-weight:900;font-size:2.5rem;color:#38BDF8;letter-spacing:6px;">RADAR</div>
+        <div style="font-family:'JetBrains Mono';font-size:0.65rem;color:#64748B;letter-spacing:2px;margin-top:10px;">
             SYSTEM: ONLINE<br>
-            ALTITUDE: FL-500<br>
-            MODE: HUNTER-KILLER<br>
-            v2.0 | VALIDATED
+            v2.1 | FULL INTEL
         </div>
-    </div>""", unsafe_allow_html=True)
-
-    st.markdown("""
-    <div class="status-panel">
-        <div>PWR: <span style="color:#10B981">NOMINAL</span></div>
-        <div>LINK: <span style="color:#10B981">SECURE</span></div>
-        <div>WEAPON: <span style="color:#F59E0B">FOX-3 READY</span></div>
-        <div>VALIDATION: <span style="color:#10B981">ACTIVE</span></div>
     </div>""", unsafe_allow_html=True)
 
     try:
@@ -285,41 +146,30 @@ with st.sidebar:
     except:
         api_key = st.text_input("🔑 API KEY", type="password")
     
-    st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-family:\'Rajdhani\';font-weight:700;color:#38BDF8;margin-bottom:5px;">COORDINATES (ALVO)</div>', unsafe_allow_html=True)
-    target = st.text_input("Empresa", placeholder="Ex: GRUPO SCHEFFER", label_visibility="collapsed")
-    
-    st.markdown('<div style="font-family:\'Rajdhani\';font-weight:700;color:#38BDF8;margin-bottom:5px;margin-top:10px;">ID (CNPJ - OPCIONAL)</div>', unsafe_allow_html=True)
-    target_cnpj = st.text_input("CNPJ", placeholder="XX.XXX.XXX/XXXX-XX", label_visibility="collapsed")
-    
-    st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
+    st.markdown('---')
+    target = st.text_input("🎯 Empresa Alvo", placeholder="Ex: GRUPO SCHEFFER")
+    target_cnpj = st.text_input("🏷️ CNPJ (Opcional)", placeholder="XX.XXX.XXX/XXXX-XX")
+    st.markdown('---')
     
     btn_label = "🦊 FOX 3 - DISPARAR" if target else "⛔ AGUARDANDO ALVO"
     btn = st.button(btn_label, type="primary", disabled=not target, use_container_width=True)
 
-    st.markdown('<div style="position:fixed;bottom:10px;font-size:0.6rem;color:#475569;font-family:\'JetBrains Mono\';">RADAR SYSTEM © 2026 | CLASSIFIED</div>', unsafe_allow_html=True)
-
 # ==============================================================================
 # MAIN — FLIGHT DECK (HUD)
 # ==============================================================================
-tab_radar, tab_intel = st.tabs(["📡 RADAR DISPLAY", "📂 INTEL PACKET"])
+tab_dossie, tab_raw = st.tabs(["📋 DOSSIÊ COMPLETO", "📦 RAW DATA"])
 
-with tab_radar:
+with tab_dossie:
     # TELA DE ESPERA
     if not target and not st.session_state.dossie:
         st.markdown("""
-        <div style="text-align:center;padding:80px 0;opacity:0.5;">
-            <div style="font-size:4rem;">⌖</div>
-            <div style="font-family:'Rajdhani';font-size:1.5rem;color:#64748B;letter-spacing:2px;">NO TARGET ACQUIRED</div>
+        <div style="text-align:center;padding:80px 0;">
+            <div style="font-size:4rem;opacity:0.3;">⌖</div>
+            <div style="font-family:'Rajdhani';font-size:1.5rem;color:#64748B;">NO TARGET ACQUIRED</div>
             <div style="font-family:'JetBrains Mono';font-size:0.8rem;color:#475569;margin-top:10px;">
-                ENTER COORDINATES IN SIDEBAR TO ENGAGE.
+                INSIRA COORDENADAS NO PAINEL LATERAL
             </div>
         </div>""", unsafe_allow_html=True)
-        
-        c1,c2,c3 = st.columns(3)
-        with c1: st.markdown('<div class="bda-card"><b>🗺️ RECON</b><br><small>Hectares, Culturas, Mapas</small></div>', unsafe_allow_html=True)
-        with c2: st.markdown('<div class="bda-card"><b>💰 FINOPS</b><br><small>CRAs, Dívidas, M&A</small></div>', unsafe_allow_html=True)
-        with c3: st.markdown('<div class="bda-card"><b>🤝 HUMAN INTEL</b><br><small>Decisores, LinkedIn</small></div>', unsafe_allow_html=True)
 
     # SEQUÊNCIA DE DISPARO
     if btn and target:
@@ -344,57 +194,379 @@ with tab_radar:
                 st.error(f"❌ WEAPON MALFUNCTION: {e}")
                 status.update(label="⛔ MISSION FAILED", state="error")
 
-    # RESULTADO
+    # RESULTADO COMPLETO
     if st.session_state.dossie:
         d = st.session_state.dossie
         nome = d.dados_operacionais.nome_grupo or d.empresa_alvo
         
-        col_hud1, col_hud2 = st.columns([3, 1])
-        with col_hud1:
-            st.markdown(f'<div class="radar-header" style="font-size:2.5rem;text-align:left;">{nome.upper()}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div style="font-family:\'JetBrains Mono\';color:#10B981;">✅ HARD LOCK CONFIRMED | TSTAMP: {d.timestamp_geracao}</div>', unsafe_allow_html=True)
-        
-        with col_hud2:
+        # =================================================================
+        # HEADER COM SCORE
+        # =================================================================
+        col_nome, col_score = st.columns([3, 1])
+        with col_nome:
+            st.markdown(f"# {nome.upper()}")
+            st.markdown(f"✅ **Target Locked** | {d.timestamp_geracao}")
+        with col_score:
+            tier_color = "#10B981" if d.sas_result.score >= 700 else "#38BDF8" if d.sas_result.score >= 500 else "#F59E0B"
             st.markdown(f"""
-            <div style="text-align:right;border-right:4px solid #38BDF8;padding-right:10px;">
-                <div style="color:#64748B;font-size:0.7rem;font-family:'JetBrains Mono';">SCORE SAS</div>
-                <div class="kill-metric" style="color:#38BDF8;">{d.sas_result.score}</div>
-                <div style="color:#F59E0B;font-size:0.8rem;font-weight:700;">{d.sas_result.tier.value}</div>
-            </div>""", unsafe_allow_html=True)
+            <div style="text-align:right;padding:15px;background:#1E293B;border-left:4px solid {tier_color};">
+                <div style="color:#64748B;font-size:0.7rem;">SAS SCORE</div>
+                <div style="color:{tier_color};font-size:2.5rem;font-weight:700;line-height:1;">{d.sas_result.score}</div>
+                <div style="color:{tier_color};font-size:0.9rem;font-weight:700;">{d.sas_result.tier.value}</div>
+            </div>
+            """, unsafe_allow_html=True)
         
-        st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
+        st.markdown('---')
         
-        # Usa safe_float e safe_int para NUNCA falhar
+        # =================================================================
+        # MÉTRICAS PRINCIPAIS
+        # =================================================================
         op = d.dados_operacionais
         fi = d.dados_financeiros
         
-        hectares = safe_float(op.hectares_total, 0)
-        ha_color = "#10B981" if hectares >= 5000 else "#EF4444"
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("🌾 Área Total", f"{safe_float(op.hectares_total, 0):,.0f} ha")
+        m2.metric("💰 Capital Social", f"R$ {safe_float(fi.capital_social_estimado, 0)/1e6:.1f}M" if fi.capital_social_estimado else "N/D")
+        m3.metric("🏭 Fazendas", safe_int(op.numero_fazendas, 0) or "N/D")
+        m4.metric("👥 Funcionários", f"~{safe_int(fi.funcionarios_estimados, 0)}" if fi.funcionarios_estimados else "N/D")
+        m5.metric("📈 Faturamento", f"R$ {safe_float(fi.faturamento_estimado, 0)/1e6:.0f}M" if fi.faturamento_estimado else "N/D")
         
-        capital = safe_float(fi.capital_social_estimado, 0)
-        fazendas = safe_int(op.numero_fazendas, 0)
-        funcionarios = safe_int(fi.funcionarios_estimados, 0)
+        # =================================================================
+        # 1. DADOS CADASTRAIS (CNPJ)
+        # =================================================================
+        if d.dados_cnpj:
+            st.markdown('### 📋 DADOS CADASTRAIS')
+            dc = d.dados_cnpj
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown(f"""
+                <div class="info-card">
+                    <strong>Razão Social:</strong> {dc.razao_social}<br>
+                    <strong>CNPJ:</strong> {formatar_cnpj(dc.cnpj) if dc.cnpj else 'N/D'}<br>
+                    <strong>Situação:</strong> {dc.situacao_cadastral}<br>
+                    <strong>Abertura:</strong> {dc.data_abertura}<br>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown(f"""
+                <div class="info-card">
+                    <strong>Natureza Jurídica:</strong> {dc.natureza_juridica}<br>
+                    <strong>Porte:</strong> {dc.porte}<br>
+                    <strong>CNAE Principal:</strong> {dc.cnae_principal} - {dc.cnae_descricao}<br>
+                    <strong>Localização:</strong> {dc.municipio}/{dc.uf}<br>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # QSA - Quadro Societário
+            if dc.qsa:
+                st.markdown("#### 👥 Quadro Societário (QSA)")
+                qsa_data = []
+                for socio in dc.qsa[:10]:  # Top 10
+                    qsa_data.append({
+                        "Nome": socio.get('nome', 'N/D'),
+                        "Qualificação": socio.get('qualificacao', 'N/D'),
+                        "Data Entrada": socio.get('data_entrada', 'N/D')
+                    })
+                if qsa_data:
+                    st.dataframe(pd.DataFrame(qsa_data), use_container_width=True, hide_index=True)
         
-        k1, k2, k3, k4 = st.columns(4)
-        k1.markdown(f'<div style="border-top:2px solid {ha_color};padding-top:5px;"><div style="color:#64748B;font-size:0.7rem;">ÁREA TOTAL</div><div style="font-size:1.5rem;font-weight:700;color:{ha_color};">{hectares:,.0f} ha</div></div>', unsafe_allow_html=True)
-        k2.metric("CAPITAL SOCIAL", f"R${capital/1e6:.0f}M" if capital > 0 else "N/A")
-        k3.metric("FAZENDAS", fazendas if fazendas > 0 else "N/A")
-        k4.metric("FUNCIONÁRIOS", f"~{funcionarios}" if funcionarios > 0 else "N/A")
+        # =================================================================
+        # 2. DADOS OPERACIONAIS DETALHADOS
+        # =================================================================
+        st.markdown('### 🚜 DADOS OPERACIONAIS')
         
-        st.markdown('<div class="section-header">INFORMES DE INTELIGÊNCIA</div>', unsafe_allow_html=True)
-        for sec in d.secoes_analise:
-            with st.expander(f"{sec.icone} {sec.titulo}", expanded=True):
-                st.markdown(sec.conteudo)
+        col_op1, col_op2 = st.columns(2)
+        
+        with col_op1:
+            st.markdown(f"""
+            <div class="success-card">
+                <strong>🌾 Culturas:</strong> {_sj(op.culturas) or 'Não identificado'}<br>
+                <strong>🗺️ Regiões de Atuação:</strong> {_sj(op.regioes_atuacao) or 'Não identificado'}<br>
+                <strong>💧 Área Irrigada:</strong> {safe_int(op.area_irrigada_ha, 0):,} ha<br>
+                <strong>🌲 Área Florestal:</strong> {safe_int(op.area_florestal_ha, 0):,} ha
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col_op2:
+            st.markdown(f"""
+            <div class="success-card">
+                <strong>🐂 Cabeças de Gado:</strong> {safe_int(op.cabecas_gado, 0):,}<br>
+                <strong>🐔 Cabeças de Aves:</strong> {safe_int(op.cabecas_aves, 0):,}<br>
+                <strong>🐷 Cabeças de Suínos:</strong> {safe_int(op.cabecas_suinos, 0):,}<br>
+                <strong>💡 Tecnologias:</strong> {_sj(op.tecnologias_identificadas, 5) or 'Não identificado'}
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Verticalização
+        if hasattr(op, 'verticalizacao'):
+            ativos = op.verticalizacao.listar_ativos()
+            if ativos:
+                st.markdown("#### ⚙️ Verticalização")
+                st.write(", ".join(ativos))
+        
+        # =================================================================
+        # 3. DADOS FINANCEIROS DETALHADOS
+        # =================================================================
+        st.markdown('### 💰 DADOS FINANCEIROS')
+        
+        col_fin1, col_fin2 = st.columns(2)
+        
+        with col_fin1:
+            st.markdown("#### 📊 Indicadores")
+            st.markdown(f"""
+            <div class="info-card">
+                <strong>Capital Social:</strong> R$ {safe_float(fi.capital_social_estimado, 0):,.2f}<br>
+                <strong>Faturamento Estimado:</strong> R$ {safe_float(fi.faturamento_estimado, 0):,.2f}<br>
+                <strong>Funcionários:</strong> ~{safe_int(fi.funcionarios_estimados, 0):,}<br>
+                <strong>Governança Corporativa:</strong> {'Sim' if fi.governanca_corporativa else 'Não'}
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col_fin2:
+            st.markdown("#### 🤝 Parceiros Financeiros")
+            if fi.parceiros_financeiros:
+                st.write(", ".join(fi.parceiros_financeiros))
+            else:
+                st.write("Não identificados")
+            
+            if fi.auditorias:
+                st.markdown("**📋 Auditorias:**")
+                st.write(", ".join(fi.auditorias))
+        
+        # Movimentações Financeiras
+        if fi.movimentos_financeiros:
+            st.markdown("#### 💸 Movimentações Financeiras Recentes")
+            for mov in fi.movimentos_financeiros[:10]:
+                st.markdown(f"- {mov}")
+        
+        # FIAgros e CRAs
+        if fi.fiagros_relacionados or fi.cras_emitidos:
+            col_fiagro, col_cra = st.columns(2)
+            
+            with col_fiagro:
+                if fi.fiagros_relacionados:
+                    st.markdown("#### 📊 FIAgros Relacionados")
+                    for fiagro in fi.fiagros_relacionados:
+                        st.markdown(f"- {fiagro}")
+            
+            with col_cra:
+                if fi.cras_emitidos:
+                    st.markdown("#### 📜 CRAs Emitidos")
+                    for cra in fi.cras_emitidos:
+                        st.markdown(f"- {cra}")
+        
+        # =================================================================
+        # 4. CADEIA DE VALOR
+        # =================================================================
+        st.markdown('### 🔗 CADEIA DE VALOR')
+        
+        cv = d.cadeia_valor
+        col_cv1, col_cv2 = st.columns(2)
+        
+        with col_cv1:
+            st.markdown(f"""
+            <div class="info-card">
+                <strong>Posição na Cadeia:</strong> {cv.posicao_cadeia or 'N/D'}<br>
+                <strong>Integração Vertical:</strong> {cv.integracao_vertical_nivel or 'N/D'}<br>
+                <strong>Exporta:</strong> {'Sim' if cv.exporta else 'Não'}<br>
+                <strong>Canais de Venda:</strong> {_sj(cv.canais_venda) or 'N/D'}
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if cv.certificacoes:
+                st.markdown("**🏅 Certificações:**")
+                st.write(", ".join(cv.certificacoes))
+        
+        with col_cv2:
+            if cv.clientes_principais:
+                st.markdown("**🎯 Clientes Principais:**")
+                for cliente in cv.clientes_principais[:5]:
+                    st.markdown(f"- {cliente}")
+            
+            if cv.fornecedores_principais:
+                st.markdown("**📦 Fornecedores Principais:**")
+                for forn in cv.fornecedores_principais[:5]:
+                    st.markdown(f"- {forn}")
+        
+        if cv.mercados_exportacao:
+            st.markdown("**🌍 Mercados de Exportação:**")
+            st.write(", ".join(cv.mercados_exportacao))
+        
+        # =================================================================
+        # 5. GRUPO ECONÔMICO
+        # =================================================================
+        st.markdown('### 🏛️ GRUPO ECONÔMICO')
+        
+        ge = d.grupo_economico
+        col_ge1, col_ge2 = st.columns(2)
+        
+        with col_ge1:
+            st.markdown(f"""
+            <div class="info-card">
+                <strong>CNPJ Matriz:</strong> {formatar_cnpj(ge.cnpj_matriz) if ge.cnpj_matriz else 'N/D'}<br>
+                <strong>Total de Empresas:</strong> {safe_int(ge.total_empresas, 0)}<br>
+                <strong>Filiais:</strong> {len(ge.cnpjs_filiais)}<br>
+                <strong>Coligadas:</strong> {len(ge.cnpjs_coligadas)}
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if ge.holding_controladora:
+                st.markdown(f"**🏛️ Holding Controladora:** {ge.holding_controladora}")
+        
+        with col_ge2:
+            if ge.controladores:
+                st.markdown("**👔 Controladores:**")
+                for ctrl in ge.controladores:
+                    st.markdown(f"- {ctrl}")
+        
+        # =================================================================
+        # 6. DECISORES E PROFILER
+        # =================================================================
+        st.markdown('### 👥 MAPA DE DECISORES')
+        
+        if d.decisores and isinstance(d.decisores, dict):
+            dec_list = d.decisores.get('decisores', [])
+            estrutura = d.decisores.get('estrutura_decisao', 'N/D')
+            
+            st.markdown(f"**Estrutura de Decisão:** {estrutura}")
+            
+            if dec_list:
+                decisores_data = []
+                for dec in dec_list:
+                    decisores_data.append({
+                        "Nome": dec.get('nome', 'N/D'),
+                        "Cargo": dec.get('cargo', 'N/D'),
+                        "LinkedIn": dec.get('linkedin', 'N/D'),
+                        "Email": dec.get('email', 'N/D'),
+                        "Perfil": dec.get('perfil_decisorio', 'N/D')
+                    })
                 
-        st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
+                st.dataframe(pd.DataFrame(decisores_data), use_container_width=True, hide_index=True)
+        
+        # =================================================================
+        # 7. TECH STACK
+        # =================================================================
+        st.markdown('### 💻 TECH STACK')
+        
+        if d.tech_stack and isinstance(d.tech_stack, dict):
+            ts = d.tech_stack
+            
+            col_tech1, col_tech2 = st.columns(2)
+            
+            with col_tech1:
+                erp_info = ts.get('erp_principal', {})
+                st.markdown(f"""
+                <div class="info-card">
+                    <strong>📦 ERP Principal:</strong> {erp_info.get('sistema', 'N/D')}<br>
+                    <strong>🏭 Fornecedor:</strong> {erp_info.get('fornecedor', 'N/D')}<br>
+                    <strong>🔍 Status:</strong> {erp_info.get('status', 'N/D')}<br>
+                    <strong>📈 Maturidade TI:</strong> {ts.get('nivel_maturidade_ti', 'N/D')}
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col_tech2:
+                outros = ts.get('outros_sistemas', [])
+                if outros:
+                    st.markdown("**🛠️ Outros Sistemas:**")
+                    for sist in outros[:5]:
+                        st.markdown(f"- **{sist.get('tipo', 'N/D')}:** {sist.get('sistema', 'N/D')}")
+            
+            vagas = ts.get('vagas_ti_abertas', [])
+            if vagas:
+                st.markdown("#### 💼 Vagas de TI Abertas")
+                for vaga in vagas[:5]:
+                    st.markdown(f"- **{vaga.get('titulo', 'N/D')}** | Sistemas: {_sj(vaga.get('sistemas_mencionados', []))}")
+        
+        # =================================================================
+        # 8. INTELIGÊNCIA DE MERCADO
+        # =================================================================
+        st.markdown('### 📡 INTELIGÊNCIA DE MERCADO')
+        
+        im = d.intel_mercado
+        
+        # Notícias
+        if im.noticias_recentes:
+            st.markdown("#### 📰 Notícias Recentes")
+            for noticia in im.noticias_recentes[:5]:
+                titulo = noticia.get('titulo', 'N/D')
+                data = noticia.get('data', 'N/D')
+                fonte = noticia.get('fonte', 'N/D')
+                st.markdown(f"- **{titulo}** ({data}) - _{fonte}_")
+        
+        # Sinais de Compra
+        col_sinais, col_riscos = st.columns(2)
+        
+        with col_sinais:
+            if im.sinais_compra:
+                st.markdown("#### 🟢 Sinais de Compra")
+                for sinal in im.sinais_compra:
+                    st.markdown(f"- {sinal}")
+            
+            if im.oportunidades:
+                st.markdown("#### 💡 Oportunidades")
+                for op in im.oportunidades:
+                    st.markdown(f"- {op}")
+        
+        with col_riscos:
+            if im.riscos:
+                st.markdown("#### ⚠️ Riscos")
+                for risco in im.riscos:
+                    st.markdown(f"- {risco}")
+            
+            if im.dores_identificadas:
+                st.markdown("#### 💔 Dores Identificadas")
+                for dor in im.dores_identificadas:
+                    st.markdown(f"- {dor}")
+        
+        if im.concorrentes:
+            st.markdown("**⚔️ Concorrentes:**")
+            st.write(", ".join(im.concorrentes))
+        
+        # =================================================================
+        # 9. ANÁLISE ESTRATÉGICA
+        # =================================================================
+        st.markdown('### 🧠 ANÁLISE ESTRATÉGICA')
+        
+        for secao in d.secoes_analise:
+            with st.expander(f"{secao.icone} {secao.titulo}", expanded=False):
+                st.markdown(secao.conteudo)
+        
+        # =================================================================
+        # 10. BREAKDOWN DO SCORE
+        # =================================================================
+        st.markdown('### 📊 BREAKDOWN DO SCORE SAS')
+        
+        breakdown = d.sas_result.breakdown
+        col_bd1, col_bd2, col_bd3, col_bd4 = st.columns(4)
+        
+        col_bd1.metric("💪 Músculo", f"{breakdown.musculo}/300")
+        col_bd2.metric("⚙️ Complexidade", f"{breakdown.complexidade}/250")
+        col_bd3.metric("👥 Gente", f"{breakdown.gente}/250")
+        col_bd4.metric("⏱️ Momento", f"{breakdown.momento}/200")
+        
+        if d.sas_result.justificativas:
+            st.markdown("#### Justificativas")
+            for just in d.sas_result.justificativas:
+                st.markdown(f"- {just}")
+        
+        # =================================================================
+        # DOWNLOAD
+        # =================================================================
+        st.markdown('---')
         csv_data = gerar_csv_report(d)
-        c_dl1, c_dl2 = st.columns([1,3])
-        with c_dl1:
-            st.download_button("📥 BAIXAR BDA (CSV)", csv_data, f"radar_{nome}.csv", "text/csv", use_container_width=True)
+        st.download_button(
+            "📥 BAIXAR DOSSIÊ COMPLETO (CSV)",
+            csv_data,
+            f"dossie_completo_{nome.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            "text/csv",
+            use_container_width=True
+        )
 
-with tab_intel:
-    st.markdown("### 📂 RAW DATA PACKET")
+with tab_raw:
+    st.markdown('### 📦 RAW DATA (JSON)')
     if st.session_state.dossie:
         st.json(json.loads(json.dumps(st.session_state.dossie, default=lambda o: o.__dict__)))
     else:
-        st.info("NO DATA AVAILABLE. EXECUTE FOX-3 FIRST.")
+        st.info("📍 Execute uma missão para visualizar dados brutos")
