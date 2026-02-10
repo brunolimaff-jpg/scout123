@@ -4,6 +4,7 @@ Coordena todas as camadas com prompts otimizados
 """
 import asyncio
 import logging
+import re
 from typing import Dict, List
 from datetime import datetime
 
@@ -33,6 +34,59 @@ class DossierOrchestrator:
         self.intel = intelligence_layer
         self.market = market_estimator
     
+    async def _buscar_cnpj_por_nome(self, razao_social: str) -> str:
+        """
+        Busca o CNPJ de uma empresa pelo nome usando Gemini + Google Search.
+        
+        Args:
+            razao_social: Nome da empresa
+        
+        Returns:
+            CNPJ com 14 dígitos (apenas números) ou string vazia se não encontrar
+        """
+        logger.info(f"[Orchestrator] Buscando CNPJ de: {razao_social}")
+        
+        prompt = f"""Encontre o CNPJ da empresa:
+
+EMPRESA: {razao_social}
+
+INSTRUCOES:
+1. Busque no site oficial da empresa, na Receita Federal ou em bases públicas
+2. Retorne APENAS os 14 dígitos do CNPJ (sem pontos, barras ou hífens)
+3. Se não encontrar, retorne: NAO_ENCONTRADO
+
+FORMATO DE RESPOSTA:
+Se encontrar: 12345678000199
+Se não encontrar: NAO_ENCONTRADO
+
+CNPJ:"""
+        
+        try:
+            response = await self.gemini.call_with_retry(
+                prompt,
+                max_retries=2,
+                use_search=True,
+                temperature=0.0
+            )
+            
+            if response and "NAO_ENCONTRADO" not in response.upper():
+                # Extrai apenas dígitos
+                cnpj = re.sub(r'\D', '', response)
+                
+                # Valida se tem 14 dígitos
+                if len(cnpj) == 14:
+                    logger.info(f"[Orchestrator] CNPJ encontrado: {cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}")
+                    return cnpj
+                else:
+                    logger.warning(f"[Orchestrator] CNPJ inválido retornado: {cnpj}")
+            
+            logger.warning(f"[Orchestrator] CNPJ não encontrado para {razao_social}")
+            return ""
+        
+        except Exception as e:
+            logger.error(f"[Orchestrator] Erro ao buscar CNPJ: {e}")
+            return ""
+    
     async def executar_dosier_completo(
         self,
         razao_social: str,
@@ -52,14 +106,26 @@ class DossierOrchestrator:
         """
         from services.cnpj_service import consultar_cnpj
         
-        # PASSO 1: Buscar CNPJ completo
-        if callback:
-            callback("🔍 Consultando dados cadastrais (CNPJ)...")
+        # PASSO 1: Se não tem CNPJ, busca pelo nome
+        if not cnpj or len(re.sub(r'\D', '', cnpj)) != 14:
+            if callback:
+                callback(f"Buscando CNPJ de '{razao_social}'...")
+            
+            cnpj_limpo = await self._buscar_cnpj_por_nome(razao_social)
+            
+            if not cnpj_limpo:
+                raise ValueError(f"Não foi possível localizar o CNPJ de '{razao_social}'")
+            
+            cnpj = cnpj_limpo
         
-        cnpj_data_obj = consultar_cnpj(cnpj if cnpj else razao_social)
+        # PASSO 2: Buscar dados completos do CNPJ
+        if callback:
+            callback("Consultando dados cadastrais (CNPJ)...")
+        
+        cnpj_data_obj = consultar_cnpj(cnpj)
         
         if not cnpj_data_obj:
-            raise ValueError(f"Não foi possível localizar o CNPJ de '{razao_social}'")
+            raise ValueError(f"CNPJ {cnpj} não encontrado na base da Receita Federal")
         
         # Converte para dict
         cnpj_dict = {
@@ -77,9 +143,9 @@ class DossierOrchestrator:
         }
         
         if callback:
-            callback(f"✅ CNPJ encontrado: {cnpj_dict['nome']} ({cnpj_dict['cnpj']})")
+            callback(f"CNPJ encontrado: {cnpj_dict['nome']} ({cnpj_dict['cnpj']})")
         
-        # PASSO 2: Chama o método principal
+        # PASSO 3: Chama o método principal
         return await self.gerar_dossie_completo(
             cnpj_data=cnpj_dict,
             progress_callback=callback
@@ -100,7 +166,7 @@ class DossierOrchestrator:
         Returns:
             Dossiê completo com TODAS as seções preenchidas
         """
-        logger.info(f"🎯 INICIANDO DOSSIÊ ULTRA-AGRESSIVO: {cnpj_data.get('nome', 'N/D')}")
+        logger.info(f"INICIANDO DOSSIE ULTRA-AGRESSIVO: {cnpj_data.get('nome', 'N/D')}")
         
         razao_social = cnpj_data.get('nome', 'Empresa Desconhecida')
         cnpj = cnpj_data.get('cnpj', '')
@@ -110,13 +176,13 @@ class DossierOrchestrator:
         # ========================================
         # FASE 1: INFRAESTRUTURA (crítico)
         # ========================================
-        self._update_progress(progress_callback, "🔍 Buscando SIGEF/CAR...", 10)
+        self._update_progress(progress_callback, "Buscando SIGEF/CAR...", 10)
         
         try:
             sigef_data = await self.infra.buscar_sigef_car(razao_social, cpfs_socios)
-            logger.info(f"✅ SIGEF: {sigef_data.get('area_total_hectares', 0)} ha")
+            logger.info(f"SIGEF: {sigef_data.get('area_total_hectares', 0)} ha")
         except Exception as e:
-            logger.error(f"❌ SIGEF falhou: {e}")
+            logger.error(f"SIGEF falhou: {e}")
             sigef_data = {"area_total_hectares": 0, "car_records": []}
         
         # Extrai metadados do SIGEF
@@ -131,7 +197,7 @@ class DossierOrchestrator:
         # ========================================
         # FASE 2: PARALELO (infra + financial)
         # ========================================
-        self._update_progress(progress_callback, "⚡ Executando camadas em paralelo...", 25)
+        self._update_progress(progress_callback, "Executando camadas em paralelo...", 25)
         
         tasks = {
             'maquinario': self.infra.forense_maquinario(razao_social, cnpj),
@@ -149,54 +215,54 @@ class DossierOrchestrator:
             # Log de erros
             for key, value in parallel_data.items():
                 if isinstance(value, Exception):
-                    logger.error(f"❌ {key} falhou: {value}")
+                    logger.error(f"{key} falhou: {value}")
                     parallel_data[key] = {}
                 else:
-                    logger.info(f"✅ {key} concluído")
+                    logger.info(f"{key} concluído")
         
         except Exception as e:
-            logger.error(f"❌ Erro no paralelo: {e}")
+            logger.error(f"Erro no paralelo: {e}")
             parallel_data = {k: {} for k in tasks.keys()}
         
         # ========================================
         # FASE 3: INTELLIGENCE (sequencial)
         # ========================================
-        self._update_progress(progress_callback, "🧠 Gerando inteligência competitiva...", 50)
+        self._update_progress(progress_callback, "Gerando inteligencia competitiva...", 50)
         
         try:
             concorrentes = await self.intel.mapeamento_concorrentes(razao_social, culturas, estados)
         except Exception as e:
-            logger.error(f"❌ Concorrentes falhou: {e}")
+            logger.error(f"Concorrentes falhou: {e}")
             concorrentes = {"concorrentes_diretos": []}
         
-        self._update_progress(progress_callback, "📊 Rastreando M&A...", 60)
+        self._update_progress(progress_callback, "Rastreando M&A...", 60)
         
         try:
             ma_data = await self.intel.rastreio_movimentos_ma(razao_social, cpfs_socios)
         except Exception as e:
-            logger.error(f"❌ M&A falhou: {e}")
+            logger.error(f"M&A falhou: {e}")
             ma_data = {"aquisicoes_ultimos_3_anos": []}
         
-        self._update_progress(progress_callback, "👔 Perfilando liderança...", 70)
+        self._update_progress(progress_callback, "Perfilando lideranca...", 70)
         
         try:
             lideranca = await self.intel.perfilamento_lideranca(razao_social, socios)
         except Exception as e:
-            logger.error(f"❌ Liderança falhou: {e}")
+            logger.error(f"Lideranca falhou: {e}")
             lideranca = {"executivos_principais": []}
         
-        self._update_progress(progress_callback, "💻 Mapeando stack tecnológico...", 80)
+        self._update_progress(progress_callback, "Mapeando stack tecnologico...", 80)
         
         try:
             tech_stack = await self.intel.mapeamento_stack_tecnologico(razao_social, cnpj)
         except Exception as e:
-            logger.error(f"❌ Tech Stack falhou: {e}")
+            logger.error(f"Tech Stack falhou: {e}")
             tech_stack = {"erp_atual": "N/D"}
         
         # ========================================
         # FASE 4: SCORING SAS
         # ========================================
-        self._update_progress(progress_callback, "🎯 Calculando Score SAS...", 85)
+        self._update_progress(progress_callback, "Calculando Score SAS...", 85)
         
         try:
             score_sas = self.market.calcular_sas(
@@ -206,16 +272,16 @@ class DossierOrchestrator:
                 num_socios=len(socios),
                 tem_cra=(len(parallel_data.get('cra', {}).get('emissoes_cra', [])) > 0),
                 auditor=parallel_data.get('cra', {}).get('auditor', 'N/D'),
-                tendencia_expansao=ma_data.get('tendencia', 'Estável')
+                tendencia_expansao=ma_data.get('tendencia', 'Estavel')
             )
         except Exception as e:
-            logger.error(f"❌ Score SAS falhou: {e}")
+            logger.error(f"Score SAS falhou: {e}")
             score_sas = {"total": 0, "breakdown": {}}
         
         # ========================================
         # FASE 5: CONSOLIDAÇÃO FINAL
         # ========================================
-        self._update_progress(progress_callback, "📝 Consolidando dossiê...", 90)
+        self._update_progress(progress_callback, "Consolidando dossie...", 90)
         
         dossie = {
             # Metadados
@@ -281,9 +347,9 @@ class DossierOrchestrator:
             "socios": socios
         }
         
-        self._update_progress(progress_callback, "✅ Dossiê concluído!", 100)
+        self._update_progress(progress_callback, "Dossie concluido!", 100)
         
-        logger.info(f"🎉 DOSSIÊ CONCLUÍDO | Score: {dossie['score_sas']} | Classificação: {dossie['classificacao']}")
+        logger.info(f"DOSSIE CONCLUIDO | Score: {dossie['score_sas']} | Classificacao: {dossie['classificacao']}")
         
         return dossie
     
@@ -292,11 +358,11 @@ class DossierOrchestrator:
         Classifica o target baseado em Score SAS e área.
         """
         if area >= 5000 or score >= 700:
-            return "🎯 HIGH TICKET"
+            return "HIGH TICKET"
         elif score >= 400:
-            return "⚡ MÉDIO POTENCIAL"
+            return "MEDIO POTENCIAL"
         else:
-            return "⚠️ BAIXO POTENCIAL"
+            return "BAIXO POTENCIAL"
     
     def _update_progress(self, callback, message: str, percent: int):
         """
