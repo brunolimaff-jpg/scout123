@@ -198,9 +198,25 @@ if disparar_fox3:
         st.error("❌ Por favor, informe a API Key do Google Gemini!")
         st.stop()
     
-    # Inicializa serviços
+    # Inicializa serviços (TODAS AS CAMADAS)
+    from services.infrastructure_layer import InfrastructureLayer
+    from services.financial_layer import FinancialLayer
+    from services.intelligence_layer import IntelligenceLayer
+    from services.market_estimator import MarketEstimator
+    
     gemini_service = GeminiService(api_key=api_key)
-    orchestrator = DossierOrchestrator(gemini_service)
+    infrastructure_layer = InfrastructureLayer(gemini_service)
+    financial_layer = FinancialLayer(gemini_service)
+    intelligence_layer = IntelligenceLayer(gemini_service)
+    market_estimator = MarketEstimator()
+    
+    orchestrator = DossierOrchestrator(
+        gemini_service,
+        infrastructure_layer,
+        financial_layer,
+        intelligence_layer,
+        market_estimator
+    )
     
     # Limpa logs anteriores
     st.session_state.logs = []
