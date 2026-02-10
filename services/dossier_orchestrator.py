@@ -5,7 +5,8 @@ Coordena todas as camadas com prompts otimizados
 import asyncio
 import logging
 import re
-from typing import Dict, List
+import json
+from typing import Dict, List, Optional
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -34,58 +35,114 @@ class DossierOrchestrator:
         self.intel = intelligence_layer
         self.market = market_estimator
     
-    async def _buscar_cnpj_por_nome(self, razao_social: str) -> str:
+    async def _buscar_todos_cnpjs_vinculados(self, nome_ou_grupo: str) -> List[Dict]:
         """
-        Busca o CNPJ de uma empresa pelo nome usando Gemini + Google Search.
+        Busca TODOS os CNPJs vinculados a um grupo, empresa ou pessoa.
         
         Args:
-            razao_social: Nome da empresa
+            nome_ou_grupo: Nome do grupo, empresa ou pessoa física
         
         Returns:
-            CNPJ com 14 dígitos (apenas números) ou string vazia se não encontrar
+            Lista de dicts com: {"cnpj": "...", "razao_social": "...", "tipo": "..."}
         """
-        logger.info(f"[Orchestrator] Buscando CNPJ de: {razao_social}")
+        logger.info(f"[Orchestrator] Buscando TODOS CNPJs vinculados a: {nome_ou_grupo}")
         
-        prompt = f"""Encontre o CNPJ da empresa:
+        prompt = f"""MISSAO: Encontre TODOS os CNPJs relacionados ao nome/grupo abaixo.
 
-EMPRESA: {razao_social}
+ALVO: {nome_ou_grupo}
 
-INSTRUCOES:
-1. Busque no site oficial da empresa, na Receita Federal ou em bases públicas
-2. Retorne APENAS os 14 dígitos do CNPJ (sem pontos, barras ou hífens)
-3. Se não encontrar, retorne: NAO_ENCONTRADO
+INSTRUCOES CRITICAS:
+1. Busque TODAS as empresas, fazendas, holdings, subsidiarias vinculadas
+2. Se for um GRUPO (ex: Grupo Scheffer), busque TODAS as empresas do grupo
+3. Se for uma PESSOA (ex: João Silva), busque todas empresas onde ele é sócio/administrador
+4. Busque em: sites oficiais, Receita Federal, notícias, LinkedIn, relatórios
 
-FORMATO DE RESPOSTA:
-Se encontrar: 12345678000199
-Se não encontrar: NAO_ENCONTRADO
+FORMATO DE RESPOSTA (JSON obrigatório):
+[
+  {{
+    "cnpj": "06015666000106",
+    "razao_social": "SCHEFFER AGRONEGOCIO S.A.",
+    "nome_fantasia": "Scheffer",
+    "tipo": "Holding Principal",
+    "atividade": "Agricultura, pecuária"
+  }},
+  {{
+    "cnpj": "12345678000199",
+    "razao_social": "FAZENDA XYZ LTDA",
+    "nome_fantasia": "Fazenda XYZ",
+    "tipo": "Subsidiária",
+    "atividade": "Produção de grãos"
+  }}
+]
 
-CNPJ:"""
+EXEMPLOS DO QUE BUSCAR:
+- Holding principal
+- Subsidiárias e controladas
+- SPEs (Sociedades de Propósito Específico)
+- Fazendas individuais
+- Empresas de trading
+- Empresas de logística
+- Cooperativas
+- Empresas onde sócios têm participação
+
+IMPORTANTE: Retorne APENAS o JSON. Se não encontrar nenhum CNPJ, retorne: []
+
+JSON:"""
         
         try:
             response = await self.gemini.call_with_retry(
                 prompt,
-                max_retries=2,
+                max_retries=3,
                 use_search=True,
-                temperature=0.0
+                temperature=0.1
             )
             
-            if response and "NAO_ENCONTRADO" not in response.upper():
-                # Extrai apenas dígitos
-                cnpj = re.sub(r'\D', '', response)
-                
-                # Valida se tem 14 dígitos
-                if len(cnpj) == 14:
-                    logger.info(f"[Orchestrator] CNPJ encontrado: {cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}")
-                    return cnpj
-                else:
-                    logger.warning(f"[Orchestrator] CNPJ inválido retornado: {cnpj}")
+            if not response:
+                logger.warning(f"[Orchestrator] Resposta vazia do Gemini")
+                return []
             
-            logger.warning(f"[Orchestrator] CNPJ não encontrado para {razao_social}")
-            return ""
+            # Tenta extrair JSON da resposta
+            # Remove markdown code blocks se existirem
+            response_clean = response.strip()
+            if "```json" in response_clean:
+                response_clean = response_clean.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_clean:
+                response_clean = response_clean.split("```")[1].split("```")[0].strip()
+            
+            # Parse JSON
+            try:
+                cnpjs_list = json.loads(response_clean)
+                
+                if not isinstance(cnpjs_list, list):
+                    logger.warning(f"[Orchestrator] Resposta não é uma lista: {type(cnpjs_list)}")
+                    return []
+                
+                # Valida e limpa CNPJs
+                cnpjs_validados = []
+                for item in cnpjs_list:
+                    if isinstance(item, dict) and "cnpj" in item:
+                        cnpj_limpo = re.sub(r'\D', '', item["cnpj"])
+                        
+                        if len(cnpj_limpo) == 14:
+                            cnpjs_validados.append({
+                                "cnpj": cnpj_limpo,
+                                "razao_social": item.get("razao_social", "N/D"),
+                                "nome_fantasia": item.get("nome_fantasia", ""),
+                                "tipo": item.get("tipo", "Empresa"),
+                                "atividade": item.get("atividade", "")
+                            })
+                
+                logger.info(f"[Orchestrator] {len(cnpjs_validados)} CNPJs encontrados")
+                return cnpjs_validados
+            
+            except json.JSONDecodeError as e:
+                logger.error(f"[Orchestrator] Erro ao fazer parse do JSON: {e}")
+                logger.error(f"Resposta recebida: {response_clean[:500]}")
+                return []
         
         except Exception as e:
-            logger.error(f"[Orchestrator] Erro ao buscar CNPJ: {e}")
-            return ""
+            logger.error(f"[Orchestrator] Erro ao buscar CNPJs: {e}")
+            return []
     
     async def executar_dosier_completo(
         self,
@@ -95,61 +152,213 @@ CNPJ:"""
     ) -> Dict:
         """
         Método wrapper para compatibilidade com app.py original.
+        NOVO: Se não tiver CNPJ, busca TODOS os CNPJs vinculados e gera dossiê consolidado.
         
         Args:
-            razao_social: Nome da empresa alvo
-            cnpj: CNPJ (opcional)
+            razao_social: Nome da empresa/grupo/pessoa alvo
+            cnpj: CNPJ específico (opcional)
             callback: Função de callback para logs
         
         Returns:
-            Dossiê completo
+            Dossiê completo (único CNPJ ou consolidado de múltiplos)
         """
         from services.cnpj_service import consultar_cnpj
         
-        # PASSO 1: Se não tem CNPJ, busca pelo nome
-        if not cnpj or len(re.sub(r'\D', '', cnpj)) != 14:
+        # PASSO 1: Determina se é busca por CNPJ específico ou grupo inteiro
+        cnpj_limpo = re.sub(r'\D', '', cnpj) if cnpj else ""
+        
+        if cnpj_limpo and len(cnpj_limpo) == 14:
+            # Modo 1: CNPJ específico fornecido
             if callback:
-                callback(f"Buscando CNPJ de '{razao_social}'...")
+                callback("Consultando dados cadastrais (CNPJ)...")
             
-            cnpj_limpo = await self._buscar_cnpj_por_nome(razao_social)
+            cnpj_data_obj = consultar_cnpj(cnpj_limpo)
             
-            if not cnpj_limpo:
-                raise ValueError(f"Não foi possível localizar o CNPJ de '{razao_social}'")
+            if not cnpj_data_obj:
+                raise ValueError(f"CNPJ {cnpj_limpo} não encontrado na base da Receita Federal")
             
-            cnpj = cnpj_limpo
+            # Converte para dict
+            cnpj_dict = {
+                "cnpj": cnpj_data_obj.cnpj,
+                "nome": cnpj_data_obj.razao_social,
+                "nome_fantasia": cnpj_data_obj.nome_fantasia,
+                "situacao": cnpj_data_obj.situacao_cadastral,
+                "capital_social": cnpj_data_obj.capital_social,
+                "porte": cnpj_data_obj.porte,
+                "cnae_principal": cnpj_data_obj.cnae_principal,
+                "municipio": cnpj_data_obj.municipio,
+                "uf": cnpj_data_obj.uf,
+                "qsa": cnpj_data_obj.qsa,
+                "fonte": cnpj_data_obj.fonte
+            }
+            
+            if callback:
+                callback(f"CNPJ encontrado: {cnpj_dict['nome']} ({cnpj_dict['cnpj']})")
+            
+            # Gera dossiê único
+            return await self.gerar_dossie_completo(
+                cnpj_data=cnpj_dict,
+                progress_callback=callback
+            )
         
-        # PASSO 2: Buscar dados completos do CNPJ
-        if callback:
-            callback("Consultando dados cadastrais (CNPJ)...")
+        else:
+            # Modo 2: Busca completa de TODOS os CNPJs vinculados
+            if callback:
+                callback(f"Buscando TODOS os CNPJs vinculados a '{razao_social}'...")
+            
+            cnpjs_encontrados = await self._buscar_todos_cnpjs_vinculados(razao_social)
+            
+            if not cnpjs_encontrados:
+                raise ValueError(f"Não foi possível localizar CNPJs vinculados a '{razao_social}'")
+            
+            if callback:
+                callback(f"Encontrados {len(cnpjs_encontrados)} CNPJs. Gerando dossiê consolidado...")
+            
+            # Gera dossiê consolidado para TODOS os CNPJs
+            return await self._gerar_dossie_consolidado_grupo(
+                cnpjs_encontrados,
+                nome_grupo=razao_social,
+                progress_callback=callback
+            )
+    
+    async def _gerar_dossie_consolidado_grupo(
+        self,
+        cnpjs_list: List[Dict],
+        nome_grupo: str,
+        progress_callback=None
+    ) -> Dict:
+        """
+        Gera um dossiê CONSOLIDADO de múltiplos CNPJs de um grupo.
         
-        cnpj_data_obj = consultar_cnpj(cnpj)
+        Args:
+            cnpjs_list: Lista de CNPJs encontrados
+            nome_grupo: Nome do grupo/pessoa
+            progress_callback: Callback para UI
         
-        if not cnpj_data_obj:
-            raise ValueError(f"CNPJ {cnpj} não encontrado na base da Receita Federal")
+        Returns:
+            Dossiê consolidado com dados agregados de todas as empresas
+        """
+        from services.cnpj_service import consultar_cnpj
         
-        # Converte para dict
-        cnpj_dict = {
-            "cnpj": cnpj_data_obj.cnpj,
-            "nome": cnpj_data_obj.razao_social,
-            "nome_fantasia": cnpj_data_obj.nome_fantasia,
-            "situacao": cnpj_data_obj.situacao_cadastral,
-            "capital_social": cnpj_data_obj.capital_social,
-            "porte": cnpj_data_obj.porte,
-            "cnae_principal": cnpj_data_obj.cnae_principal,
-            "municipio": cnpj_data_obj.municipio,
-            "uf": cnpj_data_obj.uf,
-            "qsa": cnpj_data_obj.qsa,
-            "fonte": cnpj_data_obj.fonte
+        logger.info(f"[Orchestrator] Gerando dossiê consolidado para {len(cnpjs_list)} CNPJs")
+        
+        empresas_detalhadas = []
+        
+        # Consulta dados cadastrais de cada CNPJ
+        for i, empresa_info in enumerate(cnpjs_list):
+            cnpj = empresa_info["cnpj"]
+            
+            if progress_callback:
+                progress_callback(f"Consultando empresa {i+1}/{len(cnpjs_list)}: {empresa_info['razao_social'][:30]}...")
+            
+            try:
+                cnpj_data = consultar_cnpj(cnpj)
+                
+                if cnpj_data:
+                    empresas_detalhadas.append({
+                        "cnpj": cnpj_data.cnpj,
+                        "razao_social": cnpj_data.razao_social,
+                        "nome_fantasia": cnpj_data.nome_fantasia,
+                        "situacao": cnpj_data.situacao_cadastral,
+                        "capital_social": cnpj_data.capital_social,
+                        "porte": cnpj_data.porte,
+                        "municipio": cnpj_data.municipio,
+                        "uf": cnpj_data.uf,
+                        "qsa": cnpj_data.qsa,
+                        "tipo_vinculo": empresa_info.get("tipo", "Empresa"),
+                        "atividade": empresa_info.get("atividade", "")
+                    })
+                else:
+                    logger.warning(f"[Orchestrator] CNPJ {cnpj} não encontrado na Receita")
+            
+            except Exception as e:
+                logger.error(f"[Orchestrador] Erro ao consultar CNPJ {cnpj}: {e}")
+        
+        if not empresas_detalhadas:
+            raise ValueError(f"Nenhum CNPJ válido encontrado para '{nome_grupo}'")
+        
+        # Agora gera inteligência consolidada do grupo
+        if progress_callback:
+            progress_callback(f"Analisando grupo completo com {len(empresas_detalhadas)} empresas...")
+        
+        # Extrai todos os sócios de todas as empresas
+        todos_socios = []
+        todos_cpfs = []
+        for empresa in empresas_detalhadas:
+            for socio in empresa.get("qsa", []):
+                if socio not in todos_socios:
+                    todos_socios.append(socio)
+                    cpf = socio.get("cpf", "")
+                    if cpf and cpf not in todos_cpfs:
+                        todos_cpfs.append(cpf)
+        
+        # Busca propriedades rurais do grupo inteiro
+        if progress_callback:
+            progress_callback("Mapeando propriedades rurais do grupo...")
+        
+        try:
+            sigef_data = await self.infra.buscar_sigef_car(nome_grupo, todos_cpfs)
+        except Exception as e:
+            logger.error(f"SIGEF falhou: {e}")
+            sigef_data = {"area_total_hectares": 0, "car_records": []}
+        
+        # Busca informações financeiras consolidadas
+        if progress_callback:
+            progress_callback("Analisando saúde financeira do grupo...")
+        
+        try:
+            # Usa a empresa principal (primeira da lista) para busca financeira
+            empresa_principal = empresas_detalhadas[0]
+            cra_data = await self.financial.mineracao_cra_debentures(
+                empresa_principal["razao_social"],
+                empresa_principal["cnpj"]
+            )
+        except Exception as e:
+            logger.error(f"CRA falhou: {e}")
+            cra_data = {}
+        
+        # Consolida informações
+        dossie_consolidado = {
+            "tipo_dossie": "CONSOLIDADO_GRUPO",
+            "nome_grupo": nome_grupo,
+            "data_geracao": datetime.now().isoformat(),
+            "total_empresas": len(empresas_detalhadas),
+            
+            # Lista de todas as empresas
+            "empresas": empresas_detalhadas,
+            
+            # Consolidação de sócios
+            "socios_consolidados": todos_socios,
+            "total_socios_unicos": len(todos_socios),
+            
+            # Consolidação geográfica
+            "estados_atuacao": list(set([e["uf"] for e in empresas_detalhadas if e.get("uf")])),
+            "municipios_atuacao": list(set([e["municipio"] for e in empresas_detalhadas if e.get("municipio")])),
+            
+            # Consolidação financeira
+            "capital_social_total": sum([e.get("capital_social", 0) for e in empresas_detalhadas]),
+            
+            # Propriedades rurais
+            "area_total_hectares": sigef_data.get("area_total_hectares", 0),
+            "propriedades_rurais": sigef_data.get("car_records", []),
+            
+            # Dados financeiros
+            "faturamento_estimado": cra_data.get("faturamento_real", "N/D"),
+            "emissoes_cra": cra_data.get("emissoes_cra", []),
+            
+            # Classificação
+            "classificacao": self._classificar_target(0, sigef_data.get("area_total_hectares", 0)),
+            
+            # Empresa principal (para abordagem comercial)
+            "empresa_principal": empresas_detalhadas[0] if empresas_detalhadas else {}
         }
         
-        if callback:
-            callback(f"CNPJ encontrado: {cnpj_dict['nome']} ({cnpj_dict['cnpj']})")
+        if progress_callback:
+            progress_callback(f"Dossiê consolidado concluído! {len(empresas_detalhadas)} empresas mapeadas.")
         
-        # PASSO 3: Chama o método principal
-        return await self.gerar_dossie_completo(
-            cnpj_data=cnpj_dict,
-            progress_callback=callback
-        )
+        logger.info(f"DOSSIE CONSOLIDADO CONCLUIDO | {len(empresas_detalhadas)} empresas | {dossie_consolidado['area_total_hectares']} ha")
+        
+        return dossie_consolidado
     
     async def gerar_dossie_completo(
         self, 
@@ -157,46 +366,31 @@ CNPJ:"""
         progress_callback=None
     ) -> Dict:
         """
-        Gera dossiê completo com validação agressiva.
-        
-        Args:
-            cnpj_data: Dados da ReceitaWS (CNPJ, razão social, sócios, etc)
-            progress_callback: Função para atualizar UI (Streamlit)
-        
-        Returns:
-            Dossiê completo com TODAS as seções preenchidas
+        Gera dossiê completo para UM CNPJ específico.
         """
-        logger.info(f"INICIANDO DOSSIE ULTRA-AGRESSIVO: {cnpj_data.get('nome', 'N/D')}")
+        logger.info(f"INICIANDO DOSSIE UNICO: {cnpj_data.get('nome', 'N/D')}")
         
         razao_social = cnpj_data.get('nome', 'Empresa Desconhecida')
         cnpj = cnpj_data.get('cnpj', '')
         socios = cnpj_data.get('qsa', [])
         cpfs_socios = [s.get('cpf', '') for s in socios if s.get('cpf')]
         
-        # ========================================
-        # FASE 1: INFRAESTRUTURA (crítico)
-        # ========================================
         self._update_progress(progress_callback, "Buscando SIGEF/CAR...", 10)
         
         try:
             sigef_data = await self.infra.buscar_sigef_car(razao_social, cpfs_socios)
-            logger.info(f"SIGEF: {sigef_data.get('area_total_hectares', 0)} ha")
         except Exception as e:
             logger.error(f"SIGEF falhou: {e}")
             sigef_data = {"area_total_hectares": 0, "car_records": []}
         
-        # Extrai metadados do SIGEF
         area_total = sigef_data.get('area_total_hectares', 0)
         estados = sigef_data.get('estados_operacao', [])
         municipios = [r.get('municipio', '') for r in sigef_data.get('car_records', [])]
         culturas = []
         for record in sigef_data.get('car_records', []):
             culturas.extend(record.get('culturas', []))
-        culturas = list(set(culturas))  # Remove duplicatas
+        culturas = list(set(culturas))
         
-        # ========================================
-        # FASE 2: PARALELO (infra + financial)
-        # ========================================
         self._update_progress(progress_callback, "Executando camadas em paralelo...", 25)
         
         tasks = {
@@ -212,21 +406,15 @@ CNPJ:"""
             results = await asyncio.gather(*tasks.values(), return_exceptions=True)
             parallel_data = dict(zip(tasks.keys(), results))
             
-            # Log de erros
             for key, value in parallel_data.items():
                 if isinstance(value, Exception):
                     logger.error(f"{key} falhou: {value}")
                     parallel_data[key] = {}
-                else:
-                    logger.info(f"{key} concluído")
         
         except Exception as e:
             logger.error(f"Erro no paralelo: {e}")
             parallel_data = {k: {} for k in tasks.keys()}
         
-        # ========================================
-        # FASE 3: INTELLIGENCE (sequencial)
-        # ========================================
         self._update_progress(progress_callback, "Gerando inteligencia competitiva...", 50)
         
         try:
@@ -259,9 +447,6 @@ CNPJ:"""
             logger.error(f"Tech Stack falhou: {e}")
             tech_stack = {"erp_atual": "N/D"}
         
-        # ========================================
-        # FASE 4: SCORING SAS
-        # ========================================
         self._update_progress(progress_callback, "Calculando Score SAS...", 85)
         
         try:
@@ -278,72 +463,47 @@ CNPJ:"""
             logger.error(f"Score SAS falhou: {e}")
             score_sas = {"total": 0, "breakdown": {}}
         
-        # ========================================
-        # FASE 5: CONSOLIDAÇÃO FINAL
-        # ========================================
         self._update_progress(progress_callback, "Consolidando dossie...", 90)
         
         dossie = {
-            # Metadados
+            "tipo_dossie": "EMPRESA_UNICA",
             "razao_social": razao_social,
             "cnpj": cnpj,
             "data_geracao": datetime.now().isoformat(),
-            
-            # Score
             "score_sas": score_sas.get('total', 0),
             "breakdown_sas": score_sas.get('breakdown', {}),
             "classificacao": self._classificar_target(score_sas.get('total', 0), area_total),
-            
-            # Infraestrutura
             "area_total_hectares": area_total,
             "estados_operacao": estados,
             "municipios": municipios,
             "culturas": culturas,
             "car_records": sigef_data.get('car_records', []),
             "regularizacao_ambiental": sigef_data.get('regularizacao_percentual', 0),
-            
-            # Maquinário
             "frota": parallel_data.get('maquinario', {}),
-            
-            # Conectividade
             "conectividade": parallel_data.get('conectividade', {}),
-            
-            # Financeiro
             "faturamento": parallel_data.get('cra', {}).get('faturamento_real', 'N/D'),
             "ebitda": parallel_data.get('cra', {}).get('ebitda_consolidado', 'N/D'),
             "emissoes_cra": parallel_data.get('cra', {}).get('emissoes_cra', []),
             "auditor": parallel_data.get('cra', {}).get('auditor', 'N/D'),
-            
-            # Fiscal
             "incentivos_fiscais": parallel_data.get('incentivos', {}).get('beneficios_ativos', []),
             "economia_fiscal_anual": parallel_data.get('incentivos', {}).get('economia_fiscal_anual_total', 'N/D'),
-            
-            # Riscos
             "multas_ambientais": parallel_data.get('multas', {}).get('multas_ativas', []),
             "score_risco_ambiental": parallel_data.get('multas', {}).get('score_risco_ambiental', 'Desconhecido'),
             "processos_trabalhistas": parallel_data.get('trabalhistas', {}).get('total_processos_ativos', 0),
             "dor_trabalhista": parallel_data.get('trabalhistas', {}).get('dor_principal', 'N/D'),
-            
-            # Intelligence
             "concorrentes": concorrentes.get('concorrentes_diretos', []),
             "posicionamento_mercado": concorrentes.get('posicionamento_relativo', 'N/D'),
             "movimentos_ma": ma_data.get('aquisicoes_ultimos_3_anos', []),
             "tendencia_expansao": ma_data.get('tendencia', 'Desconhecida'),
             "pipeline_ma": ma_data.get('pipeline_provavel', 'N/D'),
-            
-            # Liderança
             "executivos": lideranca.get('executivos_principais', []),
             "cultura_organizacional": lideranca.get('cultura_organizacional', 'N/D'),
             "abordagem_comercial": lideranca.get('dica_abordagem_comercial', 'N/D'),
-            
-            # Tecnologia
             "erp_atual": tech_stack.get('erp_atual', 'N/D'),
             "stack_tecnologico": tech_stack.get('solucoes_agricolas', []),
             "maturidade_digital": tech_stack.get('maturidade_digital', 'Desconhecida'),
             "gaps_tecnologicos": tech_stack.get('gaps_identificados', []),
             "oportunidades_venda": tech_stack.get('oportunidades_venda', []),
-            
-            # Sócios
             "socios": socios
         }
         
@@ -354,9 +514,6 @@ CNPJ:"""
         return dossie
     
     def _classificar_target(self, score: int, area: int) -> str:
-        """
-        Classifica o target baseado em Score SAS e área.
-        """
         if area >= 5000 or score >= 700:
             return "HIGH TICKET"
         elif score >= 400:
@@ -365,14 +522,10 @@ CNPJ:"""
             return "BAIXO POTENCIAL"
     
     def _update_progress(self, callback, message: str, percent: int):
-        """
-        Atualiza progresso no Streamlit.
-        """
         if callback:
             try:
                 callback(message, percent)
             except:
-                # Se callback só aceita 1 parâmetro (versão antiga)
                 try:
                     callback(message)
                 except:
