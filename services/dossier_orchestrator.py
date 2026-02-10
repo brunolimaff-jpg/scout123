@@ -1,18 +1,25 @@
 """
-services/dossier_orchestrator.py — Pipeline 10 Passos v3.2
+services/dossier_orchestrator.py — Pipeline 10 Passos v3.2 (FIXED)
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import json, time
 from typing import Optional, Callable
 
-
 def _sj(lst, n=None):
     """Safe join: converts any list items to str before joining."""
     if not lst: return ''
     items = lst[:n] if n else lst
     return ', '.join(str(x) if not isinstance(x, dict) else x.get('nome', x.get('titulo', x.get('sistema', str(x)))) for x in items)
-from google import genai
+
+# Importações Google Gemini
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:
+    import google.generativeai as genai
+    types = None
+
 from scout_types import (
     DossieCompleto, DadosOperacionais, DadosFinanceiros, CadeiaValor,
     GrupoEconomico, IntelMercado, SecaoAnalise, Verticalizacao, PipelineStepResult,
@@ -85,7 +92,6 @@ def _parse_cadeia(raw):
         confianca=float(raw.get('confianca',0) or 0))
 
 def _parse_grupo(raw):
-    # controladores pode vir como list[str] ou list[dict]
     ctrls_raw = raw.get('controladores', []) or []
     ctrls = []
     for c in ctrls_raw:
@@ -93,7 +99,6 @@ def _parse_grupo(raw):
             ctrls.append(c.get('nome', c.get('razao_social', str(c))))
         else:
             ctrls.append(str(c))
-    # filiais e coligadas podem vir como list[dict] ou list[str]
     filiais = raw.get('filiais', []) or raw.get('cnpjs_filiais', []) or []
     coligadas = raw.get('coligadas', []) or raw.get('cnpjs_coligadas', []) or []
     return GrupoEconomico(
@@ -117,7 +122,7 @@ def _parse_intel(raw):
         confianca=float(raw.get('confianca',0) or 0))
 
 def _parse_secoes(texto):
-    TIT = [("🏢","Quem e Esta Empresa"),("🚜","Complexidade & Dores"),("💡","Fit Senior/GAtec"),("⚔️","Plano de Ataque")]
+    TIT = [("🏫","Quem e Esta Empresa"),("🚜","Complexidade & Dores"),("💡","Fit Senior/GAtec"),("⚔️","Plano de Ataque")]
     secoes = []
     for i, p in enumerate(texto.split('|||')):
         p = p.strip()
@@ -128,14 +133,37 @@ def _parse_secoes(texto):
 
 
 def gerar_dossie_completo(empresa_alvo, api_key, cnpj="", log_cb=None, progress_cb=None, step_cb=None):
+    """
+    Gera dossiê completo da empresa usando pipeline de 10 passos.
+    
+    Args:
+        empresa_alvo: Nome da empresa
+        api_key: Chave da API do Gemini
+        cnpj: CNPJ opcional
+        log_cb: Callback para logs (func(msg))
+        progress_cb: Callback para progresso (func(float, msg))
+        step_cb: Callback para steps (func(PipelineStepResult))
+    """
     start = time.time()
-    client = genai.Client(api_key=api_key)
+    
+    # Inicializa cliente Gemini CORRETAMENTE
+    try:
+        # Tenta novo SDK (google-genai)
+        client = genai.Client(api_key=api_key)
+    except (AttributeError, TypeError):
+        # Fallback para SDK antigo (google-generativeai)
+        genai.configure(api_key=api_key)
+        client = genai  # Usa o módulo diretamente
+    
     d = DossieCompleto(empresa_alvo=empresa_alvo, cnpj=cnpj)
+    
     def _log(m):
         d.pipeline_log.append(m)
         if log_cb: log_cb(m)
+    
     def _prog(p, m):
         if progress_cb: progress_cb(min(p, 1.0), m)
+    
     def _step(s):
         d.pipeline_steps.append(s)
         if step_cb: step_cb(s)
