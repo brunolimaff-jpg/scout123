@@ -147,11 +147,17 @@ with st.sidebar:
         help="Se não informado, será buscado automaticamente"
     )
     
-    api_key = st.text_input(
-        "Google API Key",
-        type="password",
-        help="Chave para Gemini 1.5 Pro"
-    )
+    # API Key (pega do secrets ou input manual)
+    api_key = st.secrets.get("GEMINI_API_KEY", "")
+    
+    if not api_key:
+        api_key = st.text_input(
+            "🔑 Google API Key",
+            type="password",
+            help="Obtenha em: https://aistudio.google.com/app/apikey"
+        )
+    else:
+        st.success("✅ API Key carregada dos Secrets do Streamlit Cloud")
     
     st.markdown("---")
     
