@@ -1,11 +1,10 @@
 """
 services/gemini_service.py — RADAR Intelligence Engine ULTRA-PROFUNDO
-Motor IA com 9 Agentes TURBINADOS para Extração Máxima de Inteligência
-PRECISÃO > CUSTO | SEM DÓ DE TOKENS
+Motor IA com 9 Agentes TURBINADOS + Classe GeminiService
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-import json, re, time, logging
+import json, re, time, logging, asyncio
 from typing import Optional, Any, Dict
 from enum import Enum
 from google import genai
@@ -13,15 +12,11 @@ from google.genai import types
 
 logger = logging.getLogger(__name__)
 
-# Voltando para o modelo rapido e estavel
 MODEL = "gemini-2.0-flash"
-
-# Ferramenta de Busca Nativa
 SEARCH = types.Tool(google_search=types.GoogleSearch())
 
-# ========== CACHE SIMPLES INLINE (substituindo cache_service.py) ==========
+# ========== CACHE SIMPLES ==========
 class SimpleCache:
-    """Cache simples em memória para evitar chamadas duplicadas"""
     def __init__(self):
         self._cache = {}
     
@@ -35,14 +30,14 @@ class SimpleCache:
 
 cache = SimpleCache()
 
-# ========== PRIORITY ENUM (substituindo request_queue.py) ==========
+# ========== PRIORITY ==========
 class Priority(Enum):
     LOW = 1
     NORMAL = 2
     HIGH = 3
     CRITICAL = 4
 
-# === IDENTIDADE DO SISTEMA (RADAR AWACS) ===
+# ========== IDENTIDADES ==========
 RADAR_IDENTITY = """VOCE E O SISTEMA RADAR (PROTOCOLO FOX-3) — Inteligencia de Mercado Tatica ULTRA-PROFUNDA.
 SUA MISSAO: VARREDURA COMPLETA E EXAUSTIVA. ZERO LIMITES. PRECISAO > CUSTO.
 
@@ -57,7 +52,6 @@ DIRETRIZES DE COMBATE (MODO AGRESSIVO):
 TOM DE VOZ: Militar, Objetivo, Preciso, Sem enrolacao.
 """
 
-# === BASE DE CONHECIMENTO (SENIOR / GATEC) ===
 PORTFOLIO_SENIOR = """
 === ARSENAL SENIOR SISTEMAS + GATEC ===
 A Senior Sistemas oferece a suite completa "Farm-to-Fork" via parceria GAtec:
@@ -87,6 +81,82 @@ ARGUMENTOS DE ATAQUE (FOX-3):
 """
 
 
+# ==============================================================================
+# CLASSE GEMINI SERVICE (PRINCIPAL)
+# ==============================================================================
+class GeminiService:
+    """
+    Serviço central para chamadas ao Gemini com retry e cache.
+    """
+    
+    def __init__(self, api_key: str):
+        """Inicializa o cliente Gemini."""
+        self.client = genai.Client(api_key=api_key)
+        logger.info("[GeminiService] Inicializado com sucesso")
+    
+    async def call_with_retry(
+        self, 
+        prompt: str, 
+        max_retries: int = 3,
+        use_search: bool = False,
+        temperature: float = 0.1
+    ) -> str:
+        """
+        Chama o Gemini com retry automático.
+        
+        Args:
+            prompt: Prompt para o modelo
+            max_retries: Número máximo de tentativas
+            use_search: Se deve usar Google Search
+            temperature: Temperatura do modelo
+        
+        Returns:
+            Resposta do modelo como string
+        """
+        tools = [SEARCH] if use_search else None
+        config = types.GenerateContentConfig(tools=tools, temperature=temperature)
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.client.models.generate_content(
+                    model=MODEL,
+                    contents=prompt,
+                    config=config
+                )
+                return response.text
+            
+            except Exception as e:
+                logger.warning(f"[GeminiService] Tentativa {attempt + 1}/{max_retries} falhou: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)  # Backoff exponencial
+                else:
+                    logger.error(f"[GeminiService] Todas as tentativas falharam: {e}")
+                    raise
+        
+        return ""
+    
+    def call_sync(self, prompt: str, use_search: bool = False, temperature: float = 0.1) -> str:
+        """
+        Versão síncrona da chamada (para compatibilidade).
+        """
+        tools = [SEARCH] if use_search else None
+        config = types.GenerateContentConfig(tools=tools, temperature=temperature)
+        
+        try:
+            response = self.client.models.generate_content(
+                model=MODEL,
+                contents=prompt,
+                config=config
+            )
+            return response.text
+        except Exception as e:
+            logger.error(f"[GeminiService] Erro na chamada síncrona: {e}")
+            return ""
+
+
+# ==============================================================================
+# FUNÇÕES AUXILIARES
+# ==============================================================================
 def _clean_json(text):
     """Limpa o output do Gemini para garantir JSON válido."""
     if not text: return None
@@ -102,7 +172,7 @@ def _clean_json(text):
     except: return None
 
 def _call(client, prompt, config, prio=Priority.NORMAL):
-    """Executa a chamada ao Gemini (direto, sem fila)."""
+    """Executa a chamada ao Gemini (direto)."""
     try:
         response = client.models.generate_content(model=MODEL, contents=prompt, config=config)
         return response.text
@@ -112,7 +182,7 @@ def _call(client, prompt, config, prio=Priority.NORMAL):
 
 
 # ==============================================================================
-# AGENTE 1: RECON OPERACIONAL
+# AGENTES (Versões simplificadas para compatibilidade)
 # ==============================================================================
 def agent_recon_operacional(client, empresa):
     ck = {"a":"recon_v5","e":empresa}
@@ -130,9 +200,6 @@ RETORNE JSON com: nome_grupo, hectares_total, culturas, verticalizacao, regioes_
     return r
 
 
-# ==============================================================================
-# AGENTE 2: SNIPER FINANCEIRO
-# ==============================================================================
 def agent_sniper_financeiro(client, empresa, nome_grupo=""):
     alvo = nome_grupo or empresa
     ck = {"a":"fin_v5","e":alvo}
@@ -150,9 +217,6 @@ RETORNE JSON com: capital_social_estimado, faturamento_estimado, funcionarios_es
     return r
 
 
-# ==============================================================================
-# AGENTE 3: GRUPO ECONÔMICO
-# ==============================================================================
 def agent_grupo_economico(client, empresa, cnpj_matriz=""):
     ck = {"a":"grupo_v5","e":empresa}
     c = cache.get("grupo", ck)
@@ -169,9 +233,6 @@ RETORNE JSON com: cnpj_matriz, holding_controladora, cnpjs_filiais, cnpjs_coliga
     return r
 
 
-# ==============================================================================
-# AGENTE 4: CADEIA DE VALOR
-# ==============================================================================
 def agent_cadeia_valor(client, empresa, dados_ops):
     ck = {"a":"cadeia_v5","e":empresa}
     c = cache.get("cadeia", ck)
@@ -188,9 +249,6 @@ RETORNE JSON com: posicao_cadeia, clientes_principais, fornecedores_principais, 
     return r
 
 
-# ==============================================================================
-# AGENTE 5: INTEL MERCADO
-# ==============================================================================
 def agent_intel_mercado(client, empresa, setor_info=""):
     ck = {"a":"intel_v5","e":empresa}
     c = cache.get("intel", ck)
@@ -207,9 +265,6 @@ RETORNE JSON com: noticias_recentes, sinais_compra, riscos, oportunidades, dores
     return r
 
 
-# ==============================================================================
-# AGENTE 6: PROFILER DECISORES
-# ==============================================================================
 def agent_profiler_decisores(client, empresa, nome_grupo=""):
     alvo = nome_grupo or empresa
     ck = {"a":"decisores_v5","e":alvo}
@@ -219,7 +274,7 @@ def agent_profiler_decisores(client, empresa, nome_grupo=""):
     prompt = f"""{RADAR_IDENTITY}
 MISSAO: HUMINT - MAPEAMENTO COMPLETO DE DECISORES.
 ALVO: "{alvo}"
-RETORNE JSON com: decisores (array com nome, cargo, linkedin, email, formacao, etc.), estrutura_decisao, influenciadores.
+RETORNE JSON com: decisores (array), estrutura_decisao, influenciadores.
 """
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
     r = _clean_json(_call(client, prompt, cfg)) or {"decisores":[],"confianca":0.0}
@@ -227,9 +282,6 @@ RETORNE JSON com: decisores (array com nome, cargo, linkedin, email, formacao, e
     return r
 
 
-# ==============================================================================
-# AGENTE 7: TECH STACK
-# ==============================================================================
 def agent_tech_stack(client, empresa, nome_grupo=""):
     alvo = nome_grupo or empresa
     ck = {"a":"tech_v5","e":alvo}
@@ -239,7 +291,7 @@ def agent_tech_stack(client, empresa, nome_grupo=""):
     prompt = f"""{RADAR_IDENTITY}
 MISSAO: RECONHECIMENTO COMPLETO DE SISTEMAS.
 ALVO: "{alvo}"
-RETORNE JSON com: erp_principal (dict), outros_sistemas (array), vagas_ti_abertas, nivel_maturidade_ti, gaps_identificados.
+RETORNE JSON com: erp_principal, outros_sistemas, vagas_ti_abertas, nivel_maturidade_ti, gaps_identificados.
 """
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
     r = _clean_json(_call(client, prompt, cfg)) or {"confianca":0.0}
@@ -247,62 +299,33 @@ RETORNE JSON com: erp_principal (dict), outros_sistemas (array), vagas_ti_aberta
     return r
 
 
-# ==============================================================================
-# AGENTE 8: ANÁLISE ESTRATÉGICA
-# ==============================================================================
 def agent_analise_estrategica(client, dados, sas, contexto=""):
     prompt = f"""{RADAR_IDENTITY}
 VOCÊ É O OFICIAL DE INTELIGÊNCIA DO PROJETO RADAR.
-GERAR RELATÓRIO DE MISSÃO (BDA).
 
-=== DADOS DO ALVO ===
+DADOS DO ALVO:
 {json.dumps(dados, indent=2, ensure_ascii=False, default=str)[:15000]}
 
-=== SCORE SAS ===
-Score: {sas.get('score',0)} — Tier: {sas.get('tier','N/D')}
+SCORE SAS: {sas.get('score',0)} — Tier: {sas.get('tier','N/D')}
 
 {PORTFOLIO_SENIOR}
 
-=== ESTRUTURA DO RELATÓRIO (Markdown, separe com |||) ===
-
-SEÇÃO 1 — RECONHECIMENTO DO ALVO (SITUATION REPORT):
-- Visão Raio-X: Tamanho, produção, quem manda.
-- STATUS: "ALVO PRIORITÁRIO" (>5k ha) ou "ALVO TÁTICO".
-
-SEÇÃO 2 — ANÁLISE DE VULNERABILIDADES:
-- Dores (Logística? Fiscal?).
-- Problemas com atual ERP (TOTVS/SAP).
-
-SEÇÃO 3 — ARSENAL RECOMENDADO:
-- Soluções Senior + GAtec específicas.
-- Argumento Matador.
-
-SEÇÃO 4 — PLANO DE VOO:
-- Quem abordar? Qual a isca? Red Flags.
+GERE RELATÓRIO DE MISSÃO (Markdown).
 """
     cfg = types.GenerateContentConfig(temperature=0.4)
-    return _call(client, prompt, cfg) or "FALHA NA GERAÇÃO DA ANÁLISE."
+    return _call(client, prompt, cfg) or "FALHA NA GERAÇÃO."
 
 
-# ==============================================================================
-# AGENTE 9: AUDITOR DE QUALIDADE
-# ==============================================================================
 def agent_auditor_qualidade(client, texto, dados):
     prompt = f"""{RADAR_IDENTITY}
 MISSAO: DEBRIEFING E CONTROLE DE QUALIDADE.
-
 Avalie (0-10): PRECISÃO, TÁTICA, FIT SENIOR.
-
-Retorne JSON:
-{{"scores":{{"precisao":{{"nota":0,"justificativa":""}},"acionabilidade":{{"nota":0,"justificativa":""}},"fit_senior":{{"nota":0,"justificativa":""}}}},"nota_final":0.0,"nivel":"EXCELENTE|BOM|ACEITAVEL|INSUFICIENTE","recomendacoes":[]}}"""
-    
+Retorne JSON: {{"scores":{{...}},"nota_final":0,"nivel":"..."}}
+"""
     cfg = types.GenerateContentConfig(temperature=0.2)
-    return _clean_json(_call(client, prompt, cfg)) or {"nota_final":0,"nivel":"INSUFICIENTE","recomendacoes":["Erro"]}
+    return _clean_json(_call(client, prompt, cfg)) or {"nota_final":0,"nivel":"INSUFICIENTE"}
 
 
-# ==============================================================================
-# UTILITÁRIO: BUSCA CNPJ
-# ==============================================================================
 def buscar_cnpj_por_nome(client, nome):
     ck = {"b":nome}
     c = cache.get("bcnpj", ck)
@@ -310,8 +333,8 @@ def buscar_cnpj_por_nome(client, nome):
     
     prompt = f"""{RADAR_IDENTITY}
 MISSAO: LOCALIZAR CNPJ MATRIZ. ALVO: "{nome}".
-Priorize Holdings. Retorne APENAS CNPJ ou "NAO_ENCONTRADO"."""
-    
+Retorne APENAS CNPJ ou "NAO_ENCONTRADO".
+"""
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.0)
     text = _call(client, prompt, cfg)
     if text:
