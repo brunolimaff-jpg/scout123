@@ -1,9 +1,17 @@
+# ========== CORE (Obrigatórias) ==========
 streamlit>=1.38.0
 google-genai>=1.0.0
 pandas>=2.0.0
-plotly>=5.18.0
 requests>=2.31.0
+tenacity>=8.2.0
+
+# ========== EXPORT & REPORTS (Opcionais mas recomendadas) ==========
+reportlab>=4.0.0
+python-docx>=1.1.0
+
+# ========== ANALYTICS & VISUALIZATION ==========
+plotly>=5.18.0
+
+# ========== UTILITIES ==========
 jinja2>=3.1.0
 markdown>=3.5.0
-tenacity>=8.2.0
-fpdf2>=2.7.0
