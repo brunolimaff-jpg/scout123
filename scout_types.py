@@ -1,5 +1,6 @@
 """
 scout_types.py — Contrato de Dados v3.1 (Full Agro Verticals)
+CORRIGIDO: SASBreakdown agora tem @property total()
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -229,7 +230,7 @@ class IntelMercado:
 
 
 # =============================================================================
-# SCORE
+# SCORE - CORRIGIDO COM @property total()
 # =============================================================================
 
 @dataclass
@@ -241,6 +242,7 @@ class SASBreakdown:
 
     @property
     def total(self) -> int:
+        """Retorna a soma total dos 4 pilares (propriedade calculada)"""
         return self.musculo + self.complexidade + self.gente + self.momento
 
     def to_dict(self) -> dict:
@@ -249,6 +251,7 @@ class SASBreakdown:
             "Complexidade": self.complexidade,
             "Gente (Gestão)": self.gente,
             "Momento (Tec/Gov)": self.momento,
+            "Total": self.total  # Agora funciona corretamente
         }
 
 
