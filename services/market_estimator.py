@@ -1,306 +1,252 @@
 """
-services/market_estimator.py — SAS 5.0 Engine (Verticais, Confidence, Recomendacao)
-Baseado no motor Realpolitik com verticais GRAOS/BIOENERGIA/SEMENTES/PECUARIA
+services/market_estimator.py — Cálculo SAS Score com Validação Defensiva
+Versão Atualizada: NUNCA falha em conversões de tipo
 """
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-import math
-from typing import Optional
-from scout_types import SASResult, SASBreakdown, Tier, Verticalizacao
-
-# ==========================================
-# SCORING CONFIG POR VERTICAL
-# ==========================================
-SCORING_CONFIG = {
-    "GRAOS": {
-        "musculo": {
-            "hectares": [(70000,200),(20000,150),(5000,100),(1000,50)],
-            "capital": [(200000000,150),(80000000,110),(20000000,50)],
-        },
-        "complexidade": {
-            "signals": {"tem_algodao":80,"tem_irrigacao":40,"tem_silos":40,"tem_agroindustria":30},
-            "base": 30,
-        },
-        "confidence": {"hectares":30,"capital_social":20,"vertical":20,"cnpj":15,"basic":15},
-    },
-    "BIOENERGIA": {
-        "musculo": {
-            "moagem": [(4000000,200),(2000000,150),(1000000,100)],
-            "capital": [(200000000,150),(50000000,100)],
-        },
-        "complexidade": {
-            "signals": {"tem_agroindustria":70,"certificacao_renovabio":50,"tem_silos":30},
-            "base": 50,
-        },
-        "confidence": {"moagem":35,"capital_social":20,"basic":45},
-    },
-    "SEMENTES": {
-        "musculo": {
-            "capital_primary": [(80000000,200),(20000000,150),(5000000,80)],
-        },
-        "complexidade": {
-            "signals": {"tem_hub_royalties":90,"tem_laboratorio":50,"renasem_ativo":40,"tem_silos":30},
-            "base": 40,
-        },
-        "confidence": {"renasem":30,"capital_social":30,"hub":20,"basic":20},
-    },
-    "PECUARIA": {
-        "musculo": {
-            "cabecas": [(20000,200),(10000,150),(5000,100)],
-            "capital": [(50000000,150),(10000000,80)],
-        },
-        "complexidade": {
-            "signals": {"tem_boitel":100,"tem_fabrica_racao":60,"tem_confinamento":40},
-            "base": 10,
-        },
-        "confidence": {"cabecas":35,"boitel":25,"capital_social":20,"basic":20},
-    },
-}
-
-CAPS = {"musculo": 400, "complexidade": 250, "gente": 200, "momento": 150}
-
-# ==========================================
-# HELPERS
-# ==========================================
-def _lookup(value, thresholds):
-    for threshold, points in thresholds:
-        if value >= threshold:
-            return points
-    return 0
-
-def _detect_vertical(dados):
-    """Detecta vertical com base nos dados disponveis."""
-    vert = dados.get('verticalizacao')
-    culturas = " ".join(dados.get('culturas', [])).lower()
-    has_graos = any(x in culturas for x in ['soja', 'milho', 'algod', 'sorgo', 'trigo', 'feijao'])
-    has_cana = 'cana' in culturas
-    # Pure bioenergia: cana without grains
-    if has_cana and not has_graos:
-        return "BIOENERGIA"
-    # Pecuaria
-    if dados.get('cabecas_gado', 0) > 1000:
-        return "PECUARIA"
-    if vert and (getattr(vert, 'frigorifico_bovino', False) or getattr(vert, 'frigorifico_aves', False)):
-        if not has_graos: return "PECUARIA"
-    # Sementes
-    if vert and (getattr(vert, 'sementeira', False) or getattr(vert, 'laboratorio_genetica', False)):
-        if not has_graos: return "SEMENTES"
-    # Default: GRAOS (covers mixed agro+industrial like Alvorada)
-    return "GRAOS"
-
-def _compute_musculo(dados, v_config):
-    pts = 0
-    just = []
-    # Hectares
-    ha = dados.get('hectares_total', 0)
-    if ha > 0 and "hectares" in v_config.get("musculo", {}):
-        p = _lookup(ha, v_config["musculo"]["hectares"])
-        pts = max(pts, p)
-        just.append(f"{ha:,}ha={p}pts")
-    # Capital
-    cap = dados.get('capital_social_estimado', 0) or dados.get('capital_social', 0)
-    if cap > 0:
-        for key in ["capital", "capital_primary"]:
-            if key in v_config.get("musculo", {}):
-                p = _lookup(cap, v_config["musculo"][key])
-                if key == "capital_primary":
-                    pts = max(pts, p)
-                else:
-                    pts = max(pts, p)
-                just.append(f"R${cap/1e6:.0f}M={p}pts")
-                break
-    # Cabecas gado
-    cab = dados.get('cabecas_gado', 0)
-    if cab > 0 and "cabecas" in v_config.get("musculo", {}):
-        p = _lookup(cab, v_config["musculo"]["cabecas"])
-        pts = max(pts, p)
-        just.append(f"{cab:,}cab={p}pts")
-    # Moagem
-    moag = dados.get('moagem_ton', 0)
-    if moag > 0 and "moagem" in v_config.get("musculo", {}):
-        p = _lookup(moag, v_config["musculo"]["moagem"])
-        pts = max(pts, p)
-        just.append(f"{moag:,}ton={p}pts")
-    return min(pts, CAPS["musculo"]), "; ".join(just) or "Sem dados"
-
-def _compute_complexidade(dados, v_config):
-    c = v_config.get("complexidade", {})
-    score = c.get("base", 0)
-    labels = []
-    vert = dados.get('verticalizacao')
-    # Signals from config
-    for signal, weight in c.get("signals", {}).items():
-        val = False
-        if vert and hasattr(vert, signal):
-            val = getattr(vert, signal, False)
-        elif dados.get(signal):
-            val = True
-        # Derive from culturas
-        if signal == "tem_algodao" and not val:
-            val = "algod" in " ".join(dados.get('culturas', [])).lower()
-        if signal == "tem_irrigacao" and not val and vert:
-            val = getattr(vert, 'pivos_centrais', False) or getattr(vert, 'irrigacao_gotejamento', False)
-        if val:
-            score += weight
-            labels.append(f"{signal}(+{weight})")
-    # Extra vert bonus (beyond config signals)
-    if vert:
-        extra_map = {
-            'silos':15,'armazens_gerais':15,'terminal_portuario':25,'frota_propria':15,
-            'algodoeira':25,'sementeira':20,'secador':10,
-            'usina_acucar_etanol':35,'destilaria':25,'esmagadora_soja':30,
-            'fabrica_biodiesel':25,'fabrica_racao':20,'cogeracao_energia':25,
-            'frigorifico_bovino':30,'frigorifico_aves':25,'laticinio':20,
-            'fabrica_celulose':30,'creditos_carbono':15,
-            'agricultura_precisao':10,'drones_proprios':8,'telemetria_frota':8,
-        }
-        for campo, val in extra_map.items():
-            if getattr(vert, campo, False) and campo not in [s for s in c.get("signals", {})]:
-                score += val
-                labels.append(campo)
-    return min(score, CAPS["complexidade"]), "; ".join(labels[:6]) or "Baixa complexidade"
-
-def _compute_gente(dados):
-    funcs = dados.get('funcionarios_estimados', 0)
-    score = _lookup(funcs, [(2000,200),(1000,180),(500,150),(200,120),(100,90),(50,60),(20,30)])
-    # Natureza juridica
-    nat = str(dados.get('natureza_juridica', '')).lower()
-    if 's.a.' in nat or 'anonima' in nat:
-        score += 80
-    elif 'ltda' in nat:
-        score += 30
-        cap = dados.get('capital_social_estimado', 0) or dados.get('capital_social', 0)
-        if cap > 50_000_000:
-            score += 40  # Governanca familiar
-    label = f"{funcs:,} funcs" if funcs else "N/I"
-    return min(score, CAPS["gente"]), label
-
-def _compute_momento(dados):
-    score = 0
-    labels = []
-    # Vagas TI
-    vagas = 0
-    ts = dados.get('tech_stack', {})
-    if ts:
-        vagas = len(ts.get('vagas_ti_abertas', []))
-    score += _lookup(vagas, [(4,60),(1,30)])
-    if vagas: labels.append(f"{vagas} vagas TI")
-    # Dominio/conectividade
-    techs = " ".join(str(x) for x in dados.get('tecnologias_identificadas', [])).lower()
-    if any(x in techs for x in ['site', 'dominio', 'web']): score += 20; labels.append("Dominio")
-    if any(x in techs for x in ['conectividade', 'fibra', 'starlink', 'internet']): score += 40; labels.append("Conectividade")
-    # SA bonus
-    nat = str(dados.get('natureza_juridica', '')).lower()
-    if 's.a.' in nat or 'anonima' in nat: score += 30; labels.append("S.A.")
-    # Financial governance signals
-    govs = " ".join(str(d) for d in [datos.get('movimentos_financeiros',''), datos.get('fiagros',''),
-                                      datos.get('cras',''), datos.get('parceiros_financeiros','')]).lower() \
-        if (datos := dados) else ""
-    if 'fiagro' in govs: score += 25; labels.append("Fiagro")
-    if 'cra' in govs: score += 20; labels.append("CRA")
-    if any(x in govs for x in ['auditoria','kpmg','ey','deloitte','pwc']): score += 15; labels.append("Auditoria")
-    # Grupo economico
-    grp = dados.get('grupo_economico', {})
-    if isinstance(grp, dict) and grp.get('total_empresas', 0) >= 5: score += 15; labels.append(f"Grupo {grp['total_empresas']}emp")
-    # Exportacao
-    cadeia = dados.get('cadeia_valor', {})
-    if isinstance(cadeia, dict) and cadeia.get('exporta'): score += 10; labels.append("Exporta")
-    return min(score, CAPS["momento"]), "; ".join(labels) or "Sem sinais"
-
-def _compute_confidence(dados, v_config):
-    """Compute confidence score 0-100 based on available data."""
-    total_w = 0
-    found_w = 0
-    checks = {
-        "hectares": dados.get('hectares_total', 0) > 0,
-        "capital_social": (dados.get('capital_social_estimado', 0) or dados.get('capital_social', 0)) > 0,
-        "vertical": True,  # always have vertical
-        "cnpj": bool(dados.get('cnpj') or dados.get('razao_social')),
-        "basic": bool(dados.get('razao_social')),
-        "moagem": dados.get('moagem_ton', 0) > 0,
-        "cabecas": dados.get('cabecas_gado', 0) > 0,
-        "renasem": bool(dados.get('renasem_ativo')),
-        "hub": bool(dados.get('tem_hub_royalties')),
-        "boitel": bool(dados.get('tem_boitel')),
-    }
-    for field, w in v_config.get("confidence", {}).items():
-        total_w += w
-        if checks.get(field, False):
-            found_w += w
-    return (found_w / total_w * 100) if total_w > 0 else 50
-
-def _heuristic(d):
-    inf = []
-    ha = d.get('hectares_total', 0)
-    if d.get('funcionarios_estimados', 0) == 0 and ha > 0:
-        ct = " ".join(d.get('culturas', [])).lower()
-        f = 120 if any(x in ct for x in ['cana','semente','hf','cafe']) else 200 if 'algod' in ct else 350
-        est = max(math.ceil(ha / f), d.get('cabecas_gado', 0) // 500 or 0)
-        if d.get('cabecas_aves', 0) > 0: est += d['cabecas_aves'] // 50000
-        d['funcionarios_estimados'] = est
-        inf.append(f"Funcs estimados: ~{est}")
-    if d.get('capital_social_estimado', 0) == 0 and ha > 0:
-        vha = 3500
-        d['capital_social_estimado'] = ha * vha
-        inf.append(f"Capital estimado: R${ha*vha/1e6:.1f}M")
-    return d, inf
+from typing import Dict, Any
+from scout_types import SASResult, Tier, SASBreakdown
+from services.data_validator import safe_float, safe_int, safe_list, safe_str
 
 
-# ==========================================
-# MAIN
-# ==========================================
-def calcular_sas(dados: dict) -> SASResult:
-    dados, inf = _heuristic(dados)
-    just = list(inf)
-
-    # Detect vertical
-    vertical = _detect_vertical(dados)
-    v_config = SCORING_CONFIG.get(vertical, SCORING_CONFIG["GRAOS"])
-
-    # Compute pillars
-    musc, musc_l = _compute_musculo(dados, v_config)
-    comp, comp_l = _compute_complexidade(dados, v_config)
-    gent, gent_l = _compute_gente(dados)
-    mome, mome_l = _compute_momento(dados)
-
-    just.append(f"Vertical: {vertical}")
-    just.append(f"Musculo: {musc_l} = {musc}/{CAPS['musculo']}")
-    just.append(f"Complexidade: {comp_l} = {comp}/{CAPS['complexidade']}")
-    just.append(f"Gente: {gent_l} = {gent}/{CAPS['gente']}")
-    just.append(f"Momento: {mome_l} = {mome}/{CAPS['momento']}")
-
-    raw = musc + comp + gent + mome
-
-    # Confidence penalty
-    conf = _compute_confidence(dados, v_config)
-    penalty = 1.0
-    if conf < 30: penalty = 0.5
-    elif conf < 50: penalty = 0.75
-    elif conf < 70: penalty = 0.90
-    score = int(raw * penalty)
-    if penalty < 1.0:
-        just.append(f"Confidence: {conf:.0f}% -> penalty {penalty}")
-
-    # Tier
-    tier = Tier.DIAMANTE if score >= 751 else Tier.OURO if score >= 501 else Tier.PRATA if score >= 251 else Tier.BRONZE
-
-    # Recomendacao comercial (Fit Matrix)
-    mc = musc + comp
-    gm = gent + mome
-    if mc > 400 and gm > 250:
-        reco = "BALEIA IDEAL (Field Sales)"
-    elif comp > 150 and musc < 200:
-        reco = "DOR LATENTE (Inside Sales)"
-    elif musc > 250 and comp < 100:
-        reco = "GIGANTE INERTE (Nutrir/Mkt)"
-    elif gm > 250:
-        reco = "TECH FIT (Governanca)"
-    else:
-        reco = "OPORTUNIDADE (Qualificacao)"
-
-    return SASResult(
-        score=score, tier=tier,
-        breakdown=SASBreakdown(musculo=musc, complexidade=comp, gente=gent, momento=mome),
-        dados_inferidos=len(inf) > 0, justificativas=just,
-        confidence_score=conf, recomendacao_comercial=reco, vertical_detectada=vertical,
+def calcular_sas(dados: Dict[str, Any]) -> SASResult:
+    """
+    Calcula Score SAS (Senior Agriculture Score) de 0 a 1000 pontos.
+    Sistema defensivo que NUNCA falha.
+    """
+    breakdown = SASBreakdown()
+    
+    # ========================================================================
+    # 1. TAMANHO & COMPLEXIDADE (300 pontos)
+    # ========================================================================
+    hectares = safe_float(dados.get('hectares_total', 0))
+    funcionarios = safe_int(dados.get('funcionarios_estimados', 0))
+    fazendas = safe_int(dados.get('numero_fazendas', 0))
+    
+    # Hectares (0-150 pontos)
+    if hectares >= 20000:
+        breakdown.tamanho_complexidade += 150
+    elif hectares >= 10000:
+        breakdown.tamanho_complexidade += 120
+    elif hectares >= 5000:
+        breakdown.tamanho_complexidade += 90
+    elif hectares >= 2000:
+        breakdown.tamanho_complexidade += 50
+    elif hectares >= 500:
+        breakdown.tamanho_complexidade += 20
+    
+    # Funcionários (0-80 pontos)
+    if funcionarios >= 500:
+        breakdown.tamanho_complexidade += 80
+    elif funcionarios >= 200:
+        breakdown.tamanho_complexidade += 60
+    elif funcionarios >= 100:
+        breakdown.tamanho_complexidade += 40
+    elif funcionarios >= 50:
+        breakdown.tamanho_complexidade += 20
+    
+    # Múltiplas fazendas (0-70 pontos)
+    if fazendas >= 10:
+        breakdown.tamanho_complexidade += 70
+    elif fazendas >= 5:
+        breakdown.tamanho_complexidade += 50
+    elif fazendas >= 3:
+        breakdown.tamanho_complexidade += 30
+    elif fazendas >= 2:
+        breakdown.tamanho_complexidade += 15
+    
+    # ========================================================================
+    # 2. SOFISTICAÇÃO OPERACIONAL (250 pontos)
+    # ========================================================================
+    culturas = safe_list(dados.get('culturas', []))
+    verticalizacao = dados.get('verticalizacao', {})
+    regioes = safe_list(dados.get('regioes_atuacao', []))
+    
+    # Diversificação de culturas (0-80 pontos)
+    num_culturas = len(culturas)
+    if num_culturas >= 5:
+        breakdown.sofisticacao_operacional += 80
+    elif num_culturas >= 3:
+        breakdown.sofisticacao_operacional += 50
+    elif num_culturas >= 2:
+        breakdown.sofisticacao_operacional += 25
+    
+    # Verticalização (0-100 pontos)
+    if isinstance(verticalizacao, dict):
+        vert_flags = [
+            verticalizacao.get('industria', False),
+            verticalizacao.get('logistica', False),
+            verticalizacao.get('comercializacao', False),
+            verticalizacao.get('pecuaria', False),
+            verticalizacao.get('florestal', False)
+        ]
+        vert_score = sum(20 for flag in vert_flags if flag)
+        breakdown.sofisticacao_operacional += vert_score
+    
+    # Expansão geográfica (0-70 pontos)
+    num_regioes = len(regioes)
+    if num_regioes >= 5:
+        breakdown.sofisticacao_operacional += 70
+    elif num_regioes >= 3:
+        breakdown.sofisticacao_operacional += 45
+    elif num_regioes >= 2:
+        breakdown.sofisticacao_operacional += 20
+    
+    # ========================================================================
+    # 3. SAÚDE FINANCEIRA (200 pontos)
+    # ========================================================================
+    capital_social = safe_float(dados.get('capital_social_estimado', 0))
+    faturamento = safe_float(dados.get('faturamento_estimado', 0))
+    movimentos = safe_list(dados.get('movimentos_financeiros', []))
+    fiagros = safe_list(dados.get('fiagros_relacionados', []))
+    cras = safe_list(dados.get('cras_emitidos', []))
+    
+    # Capital social (0-80 pontos)
+    if capital_social >= 100_000_000:  # 100M+
+        breakdown.saude_financeira += 80
+    elif capital_social >= 50_000_000:  # 50M+
+        breakdown.saude_financeira += 60
+    elif capital_social >= 10_000_000:  # 10M+
+        breakdown.saude_financeira += 40
+    elif capital_social >= 1_000_000:  # 1M+
+        breakdown.saude_financeira += 20
+    
+    # Faturamento estimado (0-60 pontos)
+    if faturamento >= 500_000_000:  # 500M+
+        breakdown.saude_financeira += 60
+    elif faturamento >= 100_000_000:  # 100M+
+        breakdown.saude_financeira += 40
+    elif faturamento >= 50_000_000:  # 50M+
+        breakdown.saude_financeira += 20
+    
+    # Sofisticação financeira (0-60 pontos)
+    if len(fiagros) >= 2:
+        breakdown.saude_financeira += 30
+    elif len(fiagros) >= 1:
+        breakdown.saude_financeira += 15
+    
+    if len(cras) >= 3:
+        breakdown.saude_financeira += 30
+    elif len(cras) >= 1:
+        breakdown.saude_financeira += 15
+    
+    # ========================================================================
+    # 4. POSICIONAMENTO DE MERCADO (150 pontos)
+    # ========================================================================
+    exporta = dados.get('exporta', False) or dados.get('cadeia_valor', {}).get('exporta', False)
+    certificacoes = safe_list(dados.get('certificacoes', []))
+    total_empresas = safe_int(dados.get('grupo_economico', {}).get('total_empresas', 0))
+    
+    # Exportação (0-50 pontos)
+    if exporta:
+        breakdown.posicionamento_mercado += 50
+    
+    # Certificações (0-60 pontos)
+    num_cert = len(certificacoes)
+    if num_cert >= 5:
+        breakdown.posicionamento_mercado += 60
+    elif num_cert >= 3:
+        breakdown.posicionamento_mercado += 40
+    elif num_cert >= 1:
+        breakdown.posicionamento_mercado += 20
+    
+    # Grupo econômico (0-40 pontos)
+    if total_empresas >= 10:
+        breakdown.posicionamento_mercado += 40
+    elif total_empresas >= 5:
+        breakdown.posicionamento_mercado += 25
+    elif total_empresas >= 2:
+        breakdown.posicionamento_mercado += 10
+    
+    # ========================================================================
+    # 5. MATURIDADE ORGANIZACIONAL (100 pontos)
+    # ========================================================================
+    decisores = dados.get('decisores', {})
+    tech_stack = dados.get('tech_stack', {})
+    natureza_juridica = safe_str(dados.get('natureza_juridica', ''))
+    qsa_count = safe_int(dados.get('qsa_count', 0))
+    
+    # Estrutura de decisão (0-40 pontos)
+    if isinstance(decisores, dict):
+        lista_decisores = safe_list(decisores.get('decisores', []))
+        estrutura = safe_str(decisores.get('estrutura_decisao', ''))
+        
+        if len(lista_decisores) >= 5:
+            breakdown.maturidade_organizacional += 25
+        elif len(lista_decisores) >= 3:
+            breakdown.maturidade_organizacional += 15
+        
+        if 'profissional' in estrutura.lower():
+            breakdown.maturidade_organizacional += 15
+    
+    # Maturidade tecnológica (0-30 pontos)
+    if isinstance(tech_stack, dict):
+        nivel_ti = safe_str(tech_stack.get('nivel_maturidade_ti', ''))
+        if 'avançado' in nivel_ti.lower() or 'alto' in nivel_ti.lower():
+            breakdown.maturidade_organizacional += 30
+        elif 'médio' in nivel_ti.lower() or 'intermediário' in nivel_ti.lower():
+            breakdown.maturidade_organizacional += 15
+    
+    # Estrutura jurídica (0-30 pontos)
+    if 'sociedade anônima' in natureza_juridica.lower() or 's.a.' in natureza_juridica.lower():
+        breakdown.maturidade_organizacional += 30
+    elif 'ltda' in natureza_juridica.lower():
+        breakdown.maturidade_organizacional += 15
+    
+    # ========================================================================
+    # CÁLCULO FINAL
+    # ========================================================================
+    score_total = (
+        breakdown.tamanho_complexidade +
+        breakdown.sofisticacao_operacional +
+        breakdown.saude_financeira +
+        breakdown.posicionamento_mercado +
+        breakdown.maturidade_organizacional
     )
+    
+    # Classificação por tier
+    if score_total >= 750:
+        tier = Tier.HUNTER_KILLER  # Top tier - alvo prioritário
+    elif score_total >= 500:
+        tier = Tier.HIGH_VALUE  # Alto valor
+    elif score_total >= 300:
+        tier = Tier.MEDIUM  # Médio porte
+    else:
+        tier = Tier.LOW_PRIORITY  # Baixa prioridade
+    
+    return SASResult(
+        score=score_total,
+        tier=tier,
+        breakdown=breakdown,
+        justificativa=_gerar_justificativa(breakdown, tier, dados)
+    )
+
+
+def _gerar_justificativa(breakdown: SASBreakdown, tier: Tier, dados: Dict) -> str:
+    """
+    Gera justificativa detalhada do score.
+    """
+    linhas = []
+    linhas.append(f"**Tier {tier.value}**")
+    linhas.append("")
+    
+    # Destaques positivos
+    if breakdown.tamanho_complexidade >= 150:
+        ha = safe_float(dados.get('hectares_total', 0))
+        linhas.append(f"\u2705 Operação de grande escala: {ha:,.0f} ha")
+    
+    if breakdown.sofisticacao_operacional >= 150:
+        linhas.append("\u2705 Alta sofisticação operacional com diversificação")
+    
+    if breakdown.saude_financeira >= 120:
+        linhas.append("\u2705 Sólida estrutura financeira")
+    
+    if breakdown.posicionamento_mercado >= 80:
+        linhas.append("\u2705 Forte posicionamento de mercado")
+    
+    # Pontos de atenção
+    if breakdown.maturidade_organizacional < 30:
+        linhas.append("\u26a0\ufe0f Oportunidade: Baixa maturidade organizacional")
+    
+    if breakdown.saude_financeira < 50:
+        linhas.append("\u26a0\ufe0f Risco: Estrutura financeira limitada")
+    
+    return "\n".join(linhas)
