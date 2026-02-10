@@ -1,6 +1,7 @@
 """
-services/infrastructure_layer.py — VERSÃO ULTRA-AGRESSIVA
+services/infrastructure_layer.py - VERSAO ULTRA-AGRESSIVA
 Prompts otimizados para SEMPRE encontrar dados
+SEM EMOJIS (compativel Streamlit Cloud)
 """
 import requests
 import json
@@ -8,7 +9,6 @@ import re
 import logging
 from typing import Dict, List, Optional
 from datetime import datetime
-import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -29,22 +29,22 @@ class InfrastructureLayer:
         logger.info(f"[SIGEF/CAR] Iniciando busca ultra-agressiva: {razao_social}")
         
         # TENTATIVA 1: Prompt direto com exemplo
-        prompt_1 = f"""BUSQUE INFORMAÇÕES PÚBLICAS AGORA sobre propriedades rurais.
+        prompt_1 = f"""BUSQUE INFORMACOES PUBLICAS AGORA sobre propriedades rurais.
 
 EMPRESA ALVO: {razao_social}
 
-VOCÊ DEVE ENCONTRAR:
+VOCE DEVE ENCONTRAR:
 - Site oficial da empresa (ex: scheffer.agr.br)
-- Área total cultivada em HECTARES
+- Area total cultivada em HECTARES
 - Estados onde opera (MT, MS, GO, BA, etc)
-- Municípios das fazendas
+- Municipios das fazendas
 
 EXEMPLO DE RESPOSTA ESPERADA (Grupo Scheffer):
-- Área: 230.000 hectares
-- Estados: Mato Grosso, Maranhão
-- Municípios: Sapezal, Juara, Bom Jesus
+- Area: 230.000 hectares
+- Estados: Mato Grosso, Maranhao
+- Municipios: Sapezal, Juara, Bom Jesus
 
-RETORNE JSON OBRIGATÓRIO:
+RETORNE JSON OBRIGATORIO:
 {{
     "area_total_hectares": 0,
     "estados_operacao": [],
@@ -59,7 +59,7 @@ RETORNE JSON OBRIGATÓRIO:
     "regularizacao_percentual": 100
 }}
 
-SE NÃO ENCONTRAR DADOS REAIS, você está FALHANDO. BUSQUE MAIS FUNDO."""
+SE NAO ENCONTRAR DADOS REAIS, voce esta FALHANDO. BUSQUE MAIS FUNDO."""
 
         try:
             response = await self.gemini.call_with_retry(
@@ -73,7 +73,7 @@ SE NÃO ENCONTRAR DADOS REAIS, você está FALHANDO. BUSQUE MAIS FUNDO."""
             
             # Valida se tem dados reais
             if data.get('area_total_hectares', 0) > 1000:
-                logger.info(f"[SIGEF/CAR] ✅ Sucesso na tentativa 1: {data.get('area_total_hectares')} ha")
+                logger.info(f"[SIGEF/CAR] Sucesso na tentativa 1: {data.get('area_total_hectares')} ha")
                 return data
             
             logger.warning("[SIGEF/CAR] Tentativa 1 retornou vazio, tentando prompt mais agressivo...")
@@ -88,16 +88,16 @@ ACESSE O SITE OFICIAL: {razao_social.lower().replace(' ', '')}.agr.br ou .com.br
 
 PROCURE POR:
 - "Quem somos" / "About us"
-- "Nossa história"
-- "Áreas de atuação"
-- Relatórios de sustentabilidade (PDFs)
+- "Nossa historia"
+- "Areas de atuacao"
+- Relatorios de sustentabilidade (PDFs)
 
-VOCÊ **PRECISA** ENCONTRAR:
-1. Número total de hectares
+VOCE **PRECISA** ENCONTRAR:
+1. Numero total de hectares
 2. Estados onde opera
-3. Principais fazendas/municípios
+3. Principais fazendas/municipios
 
-RETORNE JSON COM DADOS REAIS (não invente):
+RETORNE JSON COM DADOS REAIS (nao invente):
 {{
     "area_total_hectares": 0,
     "estados_operacao": [],
@@ -116,7 +116,7 @@ RETORNE JSON COM DADOS REAIS (não invente):
             data = self._parse_json_response(response)
             
             if data.get('area_total_hectares', 0) > 1000:
-                logger.info(f"[SIGEF/CAR] ✅ Sucesso na tentativa 2: {data.get('area_total_hectares')} ha")
+                logger.info(f"[SIGEF/CAR] Sucesso na tentativa 2: {data.get('area_total_hectares')} ha")
                 return data
             
             logger.warning("[SIGEF/CAR] Tentativa 2 retornou vazio, usando fallback...")
@@ -125,20 +125,20 @@ RETORNE JSON COM DADOS REAIS (não invente):
             logger.error(f"[SIGEF/CAR] Tentativa 2 falhou: {e}")
         
         # TENTATIVA 3: Busca em notícias/imprensa
-        prompt_3 = f"""ÚLTIMA TENTATIVA - BUSCA EM NOTÍCIAS
+        prompt_3 = f"""ULTIMA TENTATIVA - BUSCA EM NOTICIAS
 
-Busque em sites de notícias do agronegócio sobre {razao_social}:
+Busque em sites de noticias do agronegocio sobre {razao_social}:
 - Globo Rural
-- Valor Econômico
+- Valor Economico
 - CompREural
 - AgroLink
 
-Procure menções de:
+Procure mencoes de:
 - "X mil hectares"
 - "opera em MT/MS/GO"
 - "fazendas em..."
 
-RETORNE qualquer informação encontrada em JSON."""
+RETORNE qualquer informacao encontrada em JSON."""
 
         try:
             response = await self.gemini.call_with_retry(
@@ -151,21 +151,21 @@ RETORNE qualquer informação encontrada em JSON."""
             data = self._parse_json_response(response)
             
             if data:
-                logger.info(f"[SIGEF/CAR] ⚠️ Tentativa 3 retornou: {data}")
+                logger.info(f"[SIGEF/CAR] Tentativa 3 retornou: {data}")
                 return data
             
         except Exception as e:
             logger.error(f"[SIGEF/CAR] Tentativa 3 falhou: {e}")
         
         # Fallback final
-        logger.error(f"[SIGEF/CAR] ❌ TODAS as tentativas falharam para {razao_social}")
+        logger.error(f"[SIGEF/CAR] TODAS as tentativas falharam para {razao_social}")
         return {
             "area_total_hectares": 0,
             "car_records": [],
             "estados_operacao": [],
             "regularizacao_percentual": 0,
             "status": "erro_busca",
-            "observacoes": "Não foram encontrados dados públicos suficientes"
+            "observacoes": "Nao foram encontrados dados publicos suficientes"
         }
     
     # ======== FROTA (ULTRA-AGRESSIVO) ========
@@ -173,24 +173,24 @@ RETORNE qualquer informação encontrada em JSON."""
         """
         Forense de frota com estimativa baseada em área.
         """
-        logger.info(f"[MAQUINÁRIO] Análise de frota: {razao_social}")
+        logger.info(f"[MAQUINARIO] Analise de frota: {razao_social}")
         
-        prompt = f"""ANÁLISE DE FROTA AGRÍCOLA
+        prompt = f"""ANALISE DE FROTA AGRICOLA
 
 EMPRESA: {razao_social}
 
-BUSQUE INFORMAÇÕES SOBRE:
-1. Menções de compra de máquinas agrícolas
+BUSQUE INFORMACOES SOBRE:
+1. Mencoes de compra de maquinas agricolas
 2. Parcerias com fabricantes (John Deere, Case, Massey, CLAAS)
-3. Investimentos em mecanização
-4. Anúncios de leilões/vendas de equipamentos
+3. Investimentos em mecanizacao
+4. Anuncios de leiloes/vendas de equipamentos
 
 BENCHMARKS DO SETOR:
 - 1 trator a cada 100-150 hectares
 - 1 colheitadeira a cada 500-800 hectares
 - Plantadeiras: 1 para cada 2.000 hectares
 
-Se encontrar área total, ESTIME a frota baseado nisso.
+Se encontrar area total, ESTIME a frota baseado nisso.
 
 RETORNE JSON:
 {{
@@ -201,7 +201,7 @@ RETORNE JSON:
         "plantadeiras": 0
     }},
     "valor_estimado_frota": "R$ 0",
-    "base_calculo": "descrição"
+    "base_calculo": "descricao"
 }}"""
 
         try:
@@ -213,11 +213,11 @@ RETORNE JSON:
             )
             
             data = self._parse_json_response(response)
-            logger.info(f"[MAQUINÁRIO] ✅ Análise concluída")
+            logger.info(f"[MAQUINARIO] Analise concluida")
             return data
             
         except Exception as e:
-            logger.error(f"[MAQUINÁRIO] ❌ Erro: {e}")
+            logger.error(f"[MAQUINARIO] Erro: {e}")
             return {
                 "maquinario_confirmado": [],
                 "frota_estimada_total": {},
@@ -235,29 +235,29 @@ RETORNE JSON:
                 "status": "sem_dados"
             }
         
-        logger.info(f"[CONECTIVIDADE] Analisando {len(municipios)} municípios")
+        logger.info(f"[CONECTIVIDADE] Analisando {len(municipios)} municipios")
         
         municipios_str = ", ".join(municipios[:10])  # Limita a 10
         
-        prompt = f"""ANÁLISE DE CONECTIVIDADE RURAL
+        prompt = f"""ANALISE DE CONECTIVIDADE RURAL
 
-MUNICÍPIOS: {municipios_str}
+MUNICIPIOS: {municipios_str}
 
-BUSQUE DADOS DA ANATEL sobre cobertura móvel:
+BUSQUE DADOS DA ANATEL sobre cobertura movel:
 1. Cobertura 4G por operadora (Vivo, Claro, TIM, Oi)
-2. Existência de 5G
+2. Existencia de 5G
 3. Zonas de sombra conhecidas
-4. Velocidade média de internet
+4. Velocidade media de internet
 
-PARA CADA MUNICÍPIO, RETORNE:
+PARA CADA MUNICIPIO, RETORNE:
 {{
     "analise_por_municipio": [
         {{
             "municipio": "Nome",
             "uf": "UF",
             "cobertura_4g": {{"vivo": "X%", "claro": "X%"}},
-            "cobertura_5g": "Sim/Não",
-            "zonas_sombra": "descrição",
+            "cobertura_5g": "Sim/Nao",
+            "zonas_sombra": "descricao",
             "recomendacoes": ["Starlink", "Repetidores"]
         }}
     ],
@@ -273,11 +273,11 @@ PARA CADA MUNICÍPIO, RETORNE:
             )
             
             data = self._parse_json_response(response)
-            logger.info(f"[CONECTIVIDADE] ✅ Análise concluída")
+            logger.info(f"[CONECTIVIDADE] Analise concluida")
             return data
             
         except Exception as e:
-            logger.error(f"[CONECTIVIDADE] ❌ Erro: {e}")
+            logger.error(f"[CONECTIVIDADE] Erro: {e}")
             return {
                 "analise_por_municipio": [],
                 "status": "erro"

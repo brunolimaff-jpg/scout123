@@ -1,152 +1,121 @@
 """
-services/gemini_service.py — VERSÃO OTIMIZADA PARA STREAMLIT CLOUD
+services/gemini_service.py — COMPATÍVEL COM google-genai (SDK NOVO)
 Configuração agressiva com Google Search habilitado
 """
-import google.generativeai as genai
+import google.genai as genai  # ← SDK NOVO (google-genai)
 import logging
 import time
 from typing import Optional
-import asyncio
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
 class GeminiService:
     """
-    Serviço Gemini com configuração ultra-agressiva.
-    - Google Search SEMPRE habilitado
-    - Rate limit 60 req/min
-    - Retry automático 3x
-    - Temperature baixa para precisão
+    Wrapper do Gemini AI com:
+    - Google Search habilitado por padrão
+    - Rate limiting otimizado (60 req/min)
+    - Retry automático com backoff
     """
     
     def __init__(self, api_key: str):
         """
-        Inicializa Gemini com Search habilitado.
+        Inicializa o Gemini com configuração agressiva.
         
         Args:
-            api_key: Chave da API (vem de st.secrets ou input)
+            api_key: Google AI API Key
         """
         if not api_key:
-            raise ValueError("❌ API Key do Gemini não fornecida!")
+            raise ValueError("API Key do Google AI é obrigatória")
         
-        genai.configure(api_key=api_key)
+        # Configura cliente
+        self.client = genai.Client(api_key=api_key)
+        self.model_name = "gemini-2.0-flash-exp"
         
-        # Configuração ULTRA-AGRESSIVA
-        self.generation_config = {
-            "temperature": 0.0,  # Zero = máxima precisão
-            "top_p": 0.95,
-            "top_k": 40,
-            "max_output_tokens": 8192,  # Respostas longas permitidas
-        }
+        # Rate limiting otimizado
+        self.requests_per_minute = 60
+        self.request_interval = 60.0 / self.requests_per_minute  # ~1 req/seg
+        self.last_request_time = 0
         
-        # Safety settings MÍNIMOS (dados públicos apenas)
-        self.safety_settings = [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        ]
-        
-        # Google Search TOOLS (sempre habilitado)
-        self.tools_search = [{"google_search_retrieval": {}}]
-        
-        # Rate limiting (60 req/min = 1 por segundo)
-        self.min_interval = 1.0  # segundos entre chamadas
-        self.last_call_time = 0
-        
-        logger.info("✅ GeminiService inicializado com Google Search")
+        logger.info("[GeminiService] Inicializado com sucesso")
     
     async def call_with_retry(
         self, 
         prompt: str, 
         max_retries: int = 3,
         use_search: bool = True,
-        temperature: Optional[float] = None
+        temperature: float = 0.0
     ) -> str:
         """
-        Chama Gemini com retry automático e rate limiting.
+        Chama Gemini com retry automático.
         
         Args:
-            prompt: Texto do prompt
-            max_retries: Tentativas máximas
-            use_search: Se True, habilita Google Search
-            temperature: Override de temperatura (0.0-1.0)
-        
+            prompt: Prompt para o modelo
+            max_retries: Número máximo de tentativas
+            use_search: Habilitar Google Search
+            temperature: Criatividade (0.0 = determinístico)
+            
         Returns:
-            Resposta do Gemini
+            Resposta do modelo em texto
         """
-        # Override de temperatura se fornecido
-        config = self.generation_config.copy()
-        if temperature is not None:
-            config["temperature"] = temperature
-        
-        # Escolhe ferramentas
-        tools = self.tools_search if use_search else None
-        
-        for attempt in range(max_retries):
+        for attempt in range(1, max_retries + 1):
             try:
                 # Rate limiting
-                await self._respect_rate_limit()
+                await self._rate_limit()
                 
-                # Cria modelo
-                model = genai.GenerativeModel(
-                    model_name="gemini-2.0-flash-exp",  # Modelo mais recente
-                    generation_config=config,
-                    safety_settings=self.safety_settings,
-                    tools=tools
+                # Configuração do modelo
+                config = types.GenerateContentConfig(
+                    temperature=temperature,
+                    max_output_tokens=8192,
                 )
                 
-                # Faz a chamada
-                logger.debug(f"[GEMINI] Tentativa {attempt+1}/{max_retries} | Search: {use_search}")
+                # Habilita Google Search se solicitado
+                if use_search:
+                    config.tools = [types.Tool(google_search=types.GoogleSearch())]
                 
-                response = model.generate_content(prompt)
+                # Chama API
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=config
+                )
                 
-                # Extrai texto
-                if hasattr(response, 'text') and response.text:
-                    logger.info(f"[GEMINI] ✅ Resposta recebida ({len(response.text)} chars)")
+                # Extrai texto da resposta
+                if hasattr(response, 'text'):
                     return response.text
+                elif hasattr(response, 'candidates') and len(response.candidates) > 0:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                        parts = candidate.content.parts
+                        return "".join([part.text for part in parts if hasattr(part, 'text')])
                 
-                # Se bloqueado por safety
-                if hasattr(response, 'prompt_feedback'):
-                    logger.warning(f"[GEMINI] ⚠️ Bloqueado por safety: {response.prompt_feedback}")
-                    if attempt == max_retries - 1:
-                        return "ERRO: Conteúdo bloqueado por filtros de segurança"
+                logger.warning(f"[GeminiService] Resposta sem texto na tentativa {attempt}")
+                return ""
                 
-                # Nenhum texto retornado
-                logger.warning(f"[GEMINI] ⚠️ Resposta vazia na tentativa {attempt+1}")
-                
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)  # Backoff exponencial
-                    
             except Exception as e:
-                logger.error(f"[GEMINI] ❌ Tentativa {attempt+1} falhou: {e}")
+                logger.warning(f"[GeminiService] Tentativa {attempt}/{max_retries} falhou: {e}")
                 
-                if attempt == max_retries - 1:
+                if attempt < max_retries:
+                    # Backoff exponencial
+                    wait_time = 2 ** attempt
+                    logger.info(f"[GeminiService] Aguardando {wait_time}s antes de retry...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"[GeminiService] Todas as tentativas falharam: {e}")
                     raise
-                
-                # Backoff exponencial: 1s, 2s, 4s
-                await asyncio.sleep(2 ** attempt)
         
-        # Todas tentativas falharam
-        logger.error(f"[GEMINI] ❌ Todas as {max_retries} tentativas falharam")
-        return "ERRO: Não foi possível obter resposta do Gemini após múltiplas tentativas"
+        return ""
     
-    async def _respect_rate_limit(self):
+    async def _rate_limit(self):
         """
-        Garante 60 req/min (1 req/segundo).
+        Implementa rate limiting simples.
+        Garante intervalo mínimo entre requisições.
         """
         current_time = time.time()
-        elapsed = current_time - self.last_call_time
+        time_since_last = current_time - self.last_request_time
         
-        if elapsed < self.min_interval:
-            sleep_time = self.min_interval - elapsed
-            logger.debug(f"[RATE LIMIT] Aguardando {sleep_time:.2f}s")
-            await asyncio.sleep(sleep_time)
+        if time_since_last < self.request_interval:
+            sleep_time = self.request_interval - time_since_last
+            time.sleep(sleep_time)
         
-        self.last_call_time = time.time()
-    
-    def call_sync(self, prompt: str, use_search: bool = True) -> str:
-        """
-        Versão síncrona para compatibilidade.
-        """
-        return asyncio.run(self.call_with_retry(prompt, use_search=use_search))
+        self.last_request_time = time.time()
