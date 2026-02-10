@@ -33,6 +33,58 @@ class DossierOrchestrator:
         self.intel = intelligence_layer
         self.market = market_estimator
     
+    async def executar_dosier_completo(
+        self,
+        razao_social: str,
+        cnpj: str = "",
+        callback=None
+    ) -> Dict:
+        """
+        Método wrapper para compatibilidade com app.py original.
+        
+        Args:
+            razao_social: Nome da empresa alvo
+            cnpj: CNPJ (opcional)
+            callback: Função de callback para logs
+        
+        Returns:
+            Dossiê completo
+        """
+        from services.cnpj_service import consultar_cnpj
+        
+        # PASSO 1: Buscar CNPJ completo
+        if callback:
+            callback("🔍 Consultando dados cadastrais (CNPJ)...")
+        
+        cnpj_data_obj = consultar_cnpj(cnpj if cnpj else razao_social)
+        
+        if not cnpj_data_obj:
+            raise ValueError(f"Não foi possível localizar o CNPJ de '{razao_social}'")
+        
+        # Converte para dict
+        cnpj_dict = {
+            "cnpj": cnpj_data_obj.cnpj,
+            "nome": cnpj_data_obj.razao_social,
+            "nome_fantasia": cnpj_data_obj.nome_fantasia,
+            "situacao": cnpj_data_obj.situacao_cadastral,
+            "capital_social": cnpj_data_obj.capital_social,
+            "porte": cnpj_data_obj.porte,
+            "cnae_principal": cnpj_data_obj.cnae_principal,
+            "municipio": cnpj_data_obj.municipio,
+            "uf": cnpj_data_obj.uf,
+            "qsa": cnpj_data_obj.qsa,
+            "fonte": cnpj_data_obj.fonte
+        }
+        
+        if callback:
+            callback(f"✅ CNPJ encontrado: {cnpj_dict['nome']} ({cnpj_dict['cnpj']})")
+        
+        # PASSO 2: Chama o método principal
+        return await self.gerar_dossie_completo(
+            cnpj_data=cnpj_dict,
+            progress_callback=callback
+        )
+    
     async def gerar_dossie_completo(
         self, 
         cnpj_data: Dict,
@@ -254,5 +306,9 @@ class DossierOrchestrator:
             try:
                 callback(message, percent)
             except:
-                pass
+                # Se callback só aceita 1 parâmetro (versão antiga)
+                try:
+                    callback(message)
+                except:
+                    pass
         logger.info(f"[{percent}%] {message}")
