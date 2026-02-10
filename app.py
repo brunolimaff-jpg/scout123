@@ -1,6 +1,7 @@
 """
 app.py — RADAR FOX-3 v2.1 | Intelligence System COMPLETO
 DOSSIÊ ULTRA-DETALHADO: Decisores, Grupo Econômico, Intel Completa, Tech Stack
+UX MELHORADO: Fundo claro, alta legibilidade
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -61,64 +62,169 @@ LOGS_COMBATE = [
 st.set_page_config(page_title="RADAR | FOX-3", page_icon="✈️", layout="wide", initial_sidebar_state="expanded")
 
 # ==============================================================================
-# CSS — HUD AVIATION THEME
+# CSS — UX MELHORADO (FUNDO CLARO, ALTA LEGIBILIDADE)
 # ==============================================================================
 st.markdown("""<style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Rajdhani:wght@500;600;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 .stApp {
-    background-color: #0F172A !important;
-    color: #E2E8F0 !important;
-    font-family: 'Rajdhani', sans-serif !important;
+    background-color: #F8FAFC !important;
+    color: #1E293B !important;
+    font-family: 'Inter', sans-serif !important;
 }
 
 section[data-testid="stSidebar"] {
-    background-color: #1E293B !important;
-    border-right: 2px solid #334155 !important;
+    background-color: #FFFFFF !important;
+    border-right: 1px solid #E2E8F0 !important;
 }
 
-div[data-testid="stMetric"], .intel-card {
-    background-color: #1E293B !important;
-    border: 1px solid #475569 !important;
-    border-radius: 2px !important;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-    position: relative;
+div[data-testid="stMetric"] {
+    background-color: #FFFFFF !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 8px !important;
+    padding: 16px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+div[data-testid="stMetric"] label { 
+    color: #64748B !important; 
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.875rem !important; 
+    font-weight: 500 !important;
+}
+
+div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+    color: #0F172A !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 700 !important;
+    font-size: 1.5rem !important;
+}
+
+.stButton>button {
+    background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+    padding: 12px 24px !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 6px rgba(59, 130, 246, 0.2) !important;
+    transition: all 0.2s ease !important;
+}
+
+.stButton>button:hover {
+    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+    box-shadow: 0 6px 12px rgba(59, 130, 246, 0.3) !important;
+    transform: translateY(-1px) !important;
+}
+
+.stTextInput>div>div>input {
+    background-color: #FFFFFF !important;
+    color: #1E293B !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 8px !important;
+    font-family: 'Inter', sans-serif !important;
+    padding: 10px 14px !important;
+}
+
+.stTextInput>div>div>input:focus {
+    border-color: #3B82F6 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
 }
 
 .section-header {
-    font-family: 'Rajdhani', sans-serif;
-    color: #38BDF8;
-    font-size: 1.6rem;
+    font-family: 'Inter', sans-serif;
+    color: #0F172A;
+    font-size: 1.5rem;
     font-weight: 700;
-    text-transform: uppercase;
-    border-bottom: 2px solid #334155;
-    padding-bottom: 5px;
-    margin-top: 30px;
+    border-bottom: 2px solid #E2E8F0;
+    padding-bottom: 12px;
+    margin-top: 32px;
     margin-bottom: 20px;
 }
 
 .info-card {
-    background: #1E293B;
-    border-left: 4px solid #38BDF8;
-    padding: 15px;
-    margin-bottom: 10px;
-    border-radius: 4px;
+    background: #FFFFFF;
+    border-left: 4px solid #3B82F6;
+    padding: 20px;
+    margin-bottom: 16px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .warning-card {
-    background: #1E293B;
+    background: #FFFBEB;
     border-left: 4px solid #F59E0B;
-    padding: 15px;
-    margin-bottom: 10px;
-    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 16px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .success-card {
-    background: #1E293B;
+    background: #F0FDF4;
     border-left: 4px solid #10B981;
-    padding: 15px;
-    margin-bottom: 10px;
-    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 16px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.stTabs [data-baseweb="tab-list"] { 
+    gap: 8px; 
+    border-bottom: 1px solid #E2E8F0; 
+    background: #F8FAFC;
+    padding: 8px;
+    border-radius: 8px 8px 0 0;
+}
+
+.stTabs [data-baseweb="tab"] {
+    background-color: transparent; 
+    color: #64748B; 
+    border: none; 
+    font-family: 'Inter', sans-serif; 
+    font-weight: 600; 
+    padding: 8px 16px;
+    border-radius: 6px;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: #FFFFFF !important; 
+    color: #3B82F6 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.radar-header {
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+    font-size: 2.5rem;
+    color: #0F172A;
+    letter-spacing: -1px;
+}
+
+.radar-subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: #64748B;
+    letter-spacing: 0.5px;
+    margin-top: 8px;
+}
+
+h1, h2, h3 {
+    color: #0F172A !important;
+}
+
+.stDataFrame {
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 8px !important;
+}
+
+div[data-testid="stExpander"] {
+    background: #FFFFFF !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 8px !important;
+    margin-bottom: 12px !important;
 }
 
 </style>""", unsafe_allow_html=True)
@@ -132,12 +238,12 @@ for k in ['dossie','logs','historico','step_results']:
 # ==============================================================================
 with st.sidebar:
     st.markdown("""
-    <div style="text-align:center;padding:10px 0 20px 0;">
-        <div style="font-size:3rem;margin-bottom:0px;">📡</div>
-        <div style="font-family:'Rajdhani';font-weight:900;font-size:2.5rem;color:#38BDF8;letter-spacing:6px;">RADAR</div>
-        <div style="font-family:'JetBrains Mono';font-size:0.65rem;color:#64748B;letter-spacing:2px;margin-top:10px;">
-            SYSTEM: ONLINE<br>
-            v2.1 | FULL INTEL
+    <div style="text-align:center;padding:20px 0;">
+        <div style="font-size:3rem;margin-bottom:8px;">📡</div>
+        <div class="radar-header">RADAR</div>
+        <div class="radar-subtitle">
+            INTELLIGENCE SYSTEM v2.1<br>
+            STATUS: ONLINE
         </div>
     </div>""", unsafe_allow_html=True)
 
@@ -165,34 +271,34 @@ with tab_dossie:
         st.markdown("""
         <div style="text-align:center;padding:80px 0;">
             <div style="font-size:4rem;opacity:0.3;">⌖</div>
-            <div style="font-family:'Rajdhani';font-size:1.5rem;color:#64748B;">NO TARGET ACQUIRED</div>
-            <div style="font-family:'JetBrains Mono';font-size:0.8rem;color:#475569;margin-top:10px;">
-                INSIRA COORDENADAS NO PAINEL LATERAL
+            <div style="font-size:1.5rem;color:#64748B;font-weight:600;">Nenhum Alvo Selecionado</div>
+            <div style="font-size:0.9rem;color:#94A3B8;margin-top:12px;">
+                Insira as coordenadas no painel lateral para iniciar a missão
             </div>
         </div>""", unsafe_allow_html=True)
 
     # SEQUÊNCIA DE DISPARO
     if btn and target:
         st.session_state.dossie = None; st.session_state.logs = []
-        with st.status("🚀 INITIATING COMBAT SEQUENCE...", expanded=True) as status:
+        with st.status("🚀 Iniciando sequência de combate...", expanded=True) as status:
             log_container = st.empty()
             log_history = ""
             for i, log in enumerate(LOGS_COMBATE):
                 log_history += f"> {log}\n"
                 log_container.code(log_history, language="bash")
                 if i == len(LOGS_COMBATE) - 1:
-                    st.write("⚙️ DECRYPTING INTEL... (Aguarde o processamento final)")
+                    st.write("⚙️ Processando inteligência final...")
                 else:
                     time.sleep(random.uniform(0.4, 1.2))
             
             try:
                 dossie = gerar_dossie_completo(target, api_key, target_cnpj, log_cb=lambda m: None) 
                 st.session_state.dossie = dossie
-                status.update(label="✅ MISSION ACCOMPLISHED (TARGET NEUTRALIZED)", state="complete", expanded=False)
+                status.update(label="✅ Missão concluída com sucesso", state="complete", expanded=False)
                 st.rerun()
             except Exception as e:
-                st.error(f"❌ WEAPON MALFUNCTION: {e}")
-                status.update(label="⛔ MISSION FAILED", state="error")
+                st.error(f"❌ Falha na missão: {e}")
+                status.update(label="⛔ Missão falhou", state="error")
 
     # RESULTADO COMPLETO
     if st.session_state.dossie:
@@ -207,11 +313,11 @@ with tab_dossie:
             st.markdown(f"# {nome.upper()}")
             st.markdown(f"✅ **Target Locked** | {d.timestamp_geracao}")
         with col_score:
-            tier_color = "#10B981" if d.sas_result.score >= 700 else "#38BDF8" if d.sas_result.score >= 500 else "#F59E0B"
+            tier_color = "#10B981" if d.sas_result.score >= 700 else "#3B82F6" if d.sas_result.score >= 500 else "#F59E0B"
             st.markdown(f"""
-            <div style="text-align:right;padding:15px;background:#1E293B;border-left:4px solid {tier_color};">
-                <div style="color:#64748B;font-size:0.7rem;">SAS SCORE</div>
-                <div style="color:{tier_color};font-size:2.5rem;font-weight:700;line-height:1;">{d.sas_result.score}</div>
+            <div style="text-align:right;padding:20px;background:#FFFFFF;border-left:4px solid {tier_color};border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                <div style="color:#64748B;font-size:0.75rem;font-weight:600;">SAS SCORE</div>
+                <div style="color:{tier_color};font-size:2.5rem;font-weight:800;line-height:1;">{d.sas_result.score}</div>
                 <div style="color:{tier_color};font-size:0.9rem;font-weight:700;">{d.sas_result.tier.value}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -235,7 +341,7 @@ with tab_dossie:
         # 1. DADOS CADASTRAIS (CNPJ)
         # =================================================================
         if d.dados_cnpj:
-            st.markdown('### 📋 DADOS CADASTRAIS')
+            st.markdown('<div class="section-header">📋 DADOS CADASTRAIS</div>', unsafe_allow_html=True)
             dc = d.dados_cnpj
             col1, col2 = st.columns(2)
             
@@ -275,7 +381,7 @@ with tab_dossie:
         # =================================================================
         # 2. DADOS OPERACIONAIS DETALHADOS
         # =================================================================
-        st.markdown('### 🚜 DADOS OPERACIONAIS')
+        st.markdown('<div class="section-header">🚜 DADOS OPERACIONAIS</div>', unsafe_allow_html=True)
         
         col_op1, col_op2 = st.columns(2)
         
@@ -309,7 +415,7 @@ with tab_dossie:
         # =================================================================
         # 3. DADOS FINANCEIROS DETALHADOS
         # =================================================================
-        st.markdown('### 💰 DADOS FINANCEIROS')
+        st.markdown('<div class="section-header">💰 DADOS FINANCEIROS</div>', unsafe_allow_html=True)
         
         col_fin1, col_fin2 = st.columns(2)
         
@@ -360,7 +466,7 @@ with tab_dossie:
         # =================================================================
         # 4. CADEIA DE VALOR
         # =================================================================
-        st.markdown('### 🔗 CADEIA DE VALOR')
+        st.markdown('<div class="section-header">🔗 CADEIA DE VALOR</div>', unsafe_allow_html=True)
         
         cv = d.cadeia_valor
         col_cv1, col_cv2 = st.columns(2)
@@ -397,7 +503,7 @@ with tab_dossie:
         # =================================================================
         # 5. GRUPO ECONÔMICO
         # =================================================================
-        st.markdown('### 🏛️ GRUPO ECONÔMICO')
+        st.markdown('<div class="section-header">🏛️ GRUPO ECONÔMICO</div>', unsafe_allow_html=True)
         
         ge = d.grupo_economico
         col_ge1, col_ge2 = st.columns(2)
@@ -424,7 +530,7 @@ with tab_dossie:
         # =================================================================
         # 6. DECISORES E PROFILER
         # =================================================================
-        st.markdown('### 👥 MAPA DE DECISORES')
+        st.markdown('<div class="section-header">👥 MAPA DE DECISORES</div>', unsafe_allow_html=True)
         
         if d.decisores and isinstance(d.decisores, dict):
             dec_list = d.decisores.get('decisores', [])
@@ -448,7 +554,7 @@ with tab_dossie:
         # =================================================================
         # 7. TECH STACK
         # =================================================================
-        st.markdown('### 💻 TECH STACK')
+        st.markdown('<div class="section-header">💻 TECH STACK</div>', unsafe_allow_html=True)
         
         if d.tech_stack and isinstance(d.tech_stack, dict):
             ts = d.tech_stack
@@ -482,7 +588,7 @@ with tab_dossie:
         # =================================================================
         # 8. INTELIGÊNCIA DE MERCADO
         # =================================================================
-        st.markdown('### 📡 INTELIGÊNCIA DE MERCADO')
+        st.markdown('<div class="section-header">📡 INTELIGÊNCIA DE MERCADO</div>', unsafe_allow_html=True)
         
         im = d.intel_mercado
         
@@ -527,7 +633,7 @@ with tab_dossie:
         # =================================================================
         # 9. ANÁLISE ESTRATÉGICA
         # =================================================================
-        st.markdown('### 🧠 ANÁLISE ESTRATÉGICA')
+        st.markdown('<div class="section-header">🧠 ANÁLISE ESTRATÉGICA</div>', unsafe_allow_html=True)
         
         for secao in d.secoes_analise:
             with st.expander(f"{secao.icone} {secao.titulo}", expanded=False):
@@ -536,7 +642,7 @@ with tab_dossie:
         # =================================================================
         # 10. BREAKDOWN DO SCORE
         # =================================================================
-        st.markdown('### 📊 BREAKDOWN DO SCORE SAS')
+        st.markdown('<div class="section-header">📊 BREAKDOWN DO SCORE SAS</div>', unsafe_allow_html=True)
         
         breakdown = d.sas_result.breakdown
         col_bd1, col_bd2, col_bd3, col_bd4 = st.columns(4)
