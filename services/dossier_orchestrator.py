@@ -1,6 +1,7 @@
 """
-services/dossier_orchestrator.py — VERSÃO CORRIGIDA E ESTRUTURADA
-Garante que o dicionário de saída corresponda ao que app.py e export_handler esperam.
+services/dossier_orchestrator.py — MODO AUDITORIA DE PRECISÃO
+Foco total em evidências (Links e Notícias) e Dados Industriais Reais.
+Sem inferências mágicas.
 """
 import asyncio
 import logging
@@ -13,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 class DossierOrchestrator:
     """
-    Orquestrador que coordena as camadas e estrutura o dossiê final
-    no formato aninhado esperado pelo ExportHandler e App.
+    Orquestrador focado em AUDITORIA e EVIDÊNCIAS.
+    Prioriza links, notícias reais e dados técnicos confirmados.
     """
     
     def __init__(
@@ -30,221 +31,140 @@ class DossierOrchestrator:
         self.financial = financial_layer
         self.intel = intelligence_layer
         self.market = market_estimator
-    
-    async def _buscar_todos_cnpjs_vinculados(self, nome_ou_grupo: str) -> List[Dict]:
-        """Busca TODOS os CNPJs vinculados a um grupo."""
-        logger.info(f"[Orchestrator] Buscando TODOS CNPJs vinculados a: {nome_ou_grupo}")
+
+    async def _buscar_noticias_relevantes(self, nome_alvo: str) -> List[Dict]:
+        """
+        Busca notícias recentes e links para auditoria humana.
+        Foca em: Investimentos, Processos, Expansão, M&A, Escândalos.
+        """
+        logger.info(f"[Auditoria] Buscando notícias para: {nome_alvo}")
+        prompt = f"""
+        ATUE COMO: Auditor de Compliance e Risco Agro.
+        ALVO: "{nome_alvo}"
         
-        prompt = f"""MISSAO: Encontre TODOS os CNPJs relacionados ao nome/grupo abaixo.
-ALVO: {nome_ou_grupo}
-INSTRUCOES: Busque holding, filiais e empresas relacionadas.
-FORMATO JSON: [{{"cnpj": "...", "razao_social": "...", "tipo": "..."}}]
-"""
+        TAREFA: Localize 5 notícias ou fatos relevantes recentes (2023-2026) sobre esta empresa.
+        FOCO:
+        1. Novos investimentos (ex: usinas, armazéns, aquisições de terra).
+        2. Problemas jurídicos ou ambientais (embargos, multas).
+        3. Parcerias estratégicas ou M&A.
+        
+        RETORNE APENAS JSON:
+        [
+            {{
+                "titulo": "Resumo da notícia em 1 frase",
+                "fonte": "Nome do Site/Jornal",
+                "data_aprox": "Ano ou Mês/Ano",
+                "link": "URL se tiver ou termo de busca sugerido"
+            }}
+        ]
+        """
         try:
-            response = await self.gemini.call_with_retry(prompt, max_retries=3, use_search=True, temperature=0.1)
-            if not response: return []
-            
+            # Temperatura 0.0 para evitar alucinação de notícias falsas
+            response = await self.gemini.call_with_retry(prompt, max_retries=2, use_search=True, temperature=0.0)
             clean = response.replace("```json", "").replace("```", "").strip()
-            # Tenta extrair lista do JSON
-            try:
-                lista = json.loads(clean)
-                if isinstance(lista, list): return lista
-            except:
-                pass
-                
-            # Regex fallback
             match = re.search(r'\[.*\]', clean, re.DOTALL)
-            if match: return json.loads(match.group(0))
-            
+            if match:
+                return json.loads(match.group(0))
             return []
         except Exception as e:
-            logger.error(f"[Orchestrator] Erro ao buscar CNPJs: {e}")
+            logger.warning(f"[Auditoria] Erro ao buscar notícias: {e}")
             return []
+
+    async def _investigacao_industrial(self, nome_alvo: str) -> Dict:
+        """
+        Busca dados industriais pesados que o SIGEF não pega.
+        Ex: Capacidade de armazenagem, Usinas, Confinamento, Algodoeira.
+        """
+        logger.info(f"[Industrial] Mapeando ativos físicos de: {nome_alvo}")
+        prompt = f"""
+        ATUE COMO: Engenheiro Industrial Agrícola.
+        ALVO: "{nome_alvo}"
+        
+        TAREFA: Liste a capacidade instalada industrial e infraestrutura.
+        BUSQUE POR:
+        - Unidades de Beneficiamento de Sementes (UBS)
+        - Armazéns Gerais (Capacidade estática em sacas/toneladas)
+        - Usinas (Etanol de milho, Bioenergia)
+        - Algodoeiras (Descaroçamento)
+        - Confinamento (Cabeças estáticas)
+        
+        RETORNE JSON:
+        {{
+            "capacidade_armazenagem": "ex: 2 milhões de sacas (Estimado)",
+            "plantas_industriais": ["Lista de unidades encontradas"],
+            "segmentos_atuacao": ["Soja", "Milho", "Etanol", etc],
+            "infraestrutura_logistica": "Detalhes sobre frota ou ramais ferroviários se houver"
+        }}
+        """
+        try:
+            response = await self.gemini.call_with_retry(prompt, use_search=True, temperature=0.1)
+            clean = response.replace("```json", "").replace("```", "").strip()
+            match = re.search(r'\{.*\}', clean, re.DOTALL)
+            if match:
+                return json.loads(match.group(0))
+            return {}
+        except:
+            return {}
 
     async def executar_dosier_completo(self, razao_social: str, cnpj: str = "", callback=None) -> Dict:
-        """Ponto de entrada principal."""
+        """Pipeline Auditoria Total."""
         from services.cnpj_service import consultar_cnpj
         
+        if callback: callback(f"🚀 Iniciando Auditoria Digital: {razao_social}...")
+        
+        # 1. Identificação Corporativa
+        cnpj_info = {}
         cnpj_limpo = re.sub(r'\D', '', cnpj) if cnpj else ""
-        
         if cnpj_limpo and len(cnpj_limpo) == 14:
-            if callback: callback("Consultando dados cadastrais (CNPJ)...")
-            cnpj_data_obj = consultar_cnpj(cnpj_limpo)
-            if not cnpj_data_obj:
-                raise ValueError(f"CNPJ {cnpj_limpo} não encontrado")
-            
-            cnpj_dict = {
-                "cnpj": cnpj_data_obj.cnpj,
-                "nome": cnpj_data_obj.razao_social,
-                "qsa": cnpj_data_obj.qsa,
-                "municipio": cnpj_data_obj.municipio,
-                "uf": cnpj_data_obj.uf,
-                "capital_social": cnpj_data_obj.capital_social
-            }
-            return await self.gerar_dossie_completo(cnpj_dict, progress_callback=callback)
-            
-        else:
-            if callback: callback(f"Buscando estrutura corporativa de '{razao_social}'...")
-            cnpjs = await self._buscar_todos_cnpjs_vinculados(razao_social)
-            if not cnpjs:
-                 # Fallback: Tenta tratar como empresa única se não achar lista
-                 if callback: callback(f"Estrutura não encontrada, tentando busca direta...")
-                 return await self.gerar_dossie_completo({"nome": razao_social, "cnpj": ""}, progress_callback=callback)
-                 
-            if callback: callback(f"Encontrados {len(cnpjs)} CNPJs. Consolidando...")
-            return await self._gerar_dossie_consolidado_grupo(cnpjs, razao_social, progress_callback=callback)
-
-    async def _gerar_dossie_consolidado_grupo(self, cnpjs_list: List[Dict], nome_grupo: str, progress_callback=None) -> Dict:
-        """Gera dossiê consolidado com estrutura CORRETA."""
+            c_data = consultar_cnpj(cnpj_limpo)
+            if c_data:
+                cnpj_info = {"cnpj": c_data.cnpj, "capital_social": c_data.capital_social, "nome": c_data.razao_social}
         
-        # 1. Mapeamento de Sócios e Dados Básicos
-        todos_socios = []
-        cpfs_unicos = []
-        capital_total = 0
+        # 2. Execução Paralela de Inteligência (Todas as camadas + Auditoria)
+        if callback: callback("📡 Varrendo bases públicas, notícias e dados industriais...")
         
-        # Pega a empresa principal (assumindo a primeira ou a que tem 'holding' no nome)
-        empresa_principal = cnpjs_list[0]
+        t_infra = self.infra.buscar_sigef_car(razao_social, []) # Terras
+        t_fin = self.financial.mineracao_cra_debentures(razao_social, cnpj_info.get('cnpj', '')) # Dinheiro
+        t_tech = self.intel.mapeamento_stack_tecnologico(razao_social, "") # TI
+        t_ind = self._investigacao_industrial(razao_social) # Fábricas/Silos
+        t_news = self._buscar_noticias_relevantes(razao_social) # Auditoria/Escândalos
         
-        # 2. Infraestrutura (SIGEF/CAR) - Agrupado
-        if progress_callback: progress_callback("Mapeando terras e ativos (Consolidado)...")
+        results = await asyncio.gather(t_infra, t_fin, t_tech, t_ind, t_news, return_exceptions=True)
         
-        try:
-            # Passa lista vazia de CPFs por enquanto para agilizar, ou extrairia de uma consulta detalhada
-            sigef_data = await self.infra.buscar_sigef_car(nome_grupo, [])
-        except Exception as e:
-            logger.error(f"Erro Infra: {e}")
-            sigef_data = {"area_total_hectares": 0}
-
-        area_total = sigef_data.get("area_total_hectares", 0)
-
-        # 3. Financeiro (CRA/Debêntures)
-        if progress_callback: progress_callback("Analisando saúde financeira...")
-        try:
-            cra_data = await self.financial.mineracao_cra_debentures(nome_grupo, "")
-        except:
-            cra_data = {}
-
-        # 4. Inteligência (Concorrentes/Tech)
-        if progress_callback: progress_callback("Analisando mercado e tecnologia...")
-        try:
-            intel_data = await self.intel.mapeamento_concorrentes(nome_grupo, [], [])
-            tech_data = await self.intel.mapeamento_stack_tecnologico(nome_grupo, "")
-        except:
-            intel_data = {}
-            tech_data = {}
-
-        # 5. Estruturação dos Dados para Cálculo SAS
-        dados_para_sas = {
-            "hectares_total": area_total,
-            "funcionarios_estimados": 0, # Teria que estimar
-            "numero_fazendas": len(sigef_data.get('car_records', [])),
-            "capital_social_estimado": 0,
-            "faturamento_estimado": cra_data.get("faturamento_real", 0),
-            "culturas": [], # Extrair de SIGEF
-            "tech_stack": tech_data,
-            "cadeia_valor": {"exporta": False, "certificacoes": []} 
-        }
-
-        # 6. Cálculo SAS
-        try:
-            sas_result = self.market.calcular_sas(dados_para_sas)
-            sas_score = sas_result.score
-            sas_tier = sas_result.tier.value
-        except Exception as e:
-            logger.error(f"Erro SAS: {e}")
-            sas_score = 0
-            sas_tier = "N/D"
-
-        # 7. Montagem do Dicionário Final (ESTRUTURA ANINHADA OBRIGATÓRIA)
-        dossie = {
-            "empresa_alvo": nome_grupo, # CHAVE CRÍTICA PARA EXPORT_HANDLER
-            "tipo_dossie": "CONSOLIDADO",
-            "sas_score": sas_score,
-            "sas_tier": sas_tier,
-            
-            "dados_operacionais": {
-                "area_total": area_total, # CHAVE CRÍTICA
-                "hectares_total": area_total,
-                "regioes_atuacao": sigef_data.get("estados_operacao", []),
-                "culturas": [],
-                "numero_fazendas": len(sigef_data.get('car_records', []))
-            },
-            
-            "dados_financeiros": {
-                "faturamento_estimado": cra_data.get("faturamento_real", "N/D"),
-                "capital_social_estimado": 0,
-                "ebitda_ajustado": cra_data.get("ebitda_consolidado", "N/D")
-            },
-            
-            "tech_stack": {
-                "erp_principal": tech_data.get("erp_atual", "N/D"),
-                "maturidade_ti": tech_data.get("maturidade_digital", "N/D")
-            },
-            
-            "analise_estrategica": {
-                "quem_e_empresa": f"Grupo identificado com área de {area_total} hectares.",
-                "complexidade_dores": intel_data.get("posicionamento_relativo", "Análise em processamento"),
-                "arsenal_recomendado": "Solução completa Senior Agro (ERP + Gestão Agrícola)",
-                "plano_ataque": "Abordagem consultiva focada em eficiência operacional."
-            },
-            
-            # Dados brutos para abas extras
-            "sigef_car": sigef_data,
-            "cra_debentures": cra_data,
-            "concorrentes": intel_data,
-            "empresas_grupo": cnpjs_list
-        }
-        
-        if progress_callback: progress_callback("Dossiê consolidado concluído.")
-        return dossie
-
-    async def gerar_dossie_completo(self, cnpj_data: Dict, progress_callback=None) -> Dict:
-        """Gera dossiê único com estrutura CORRETA."""
-        razao_social = cnpj_data.get('nome', 'Empresa')
-        
-        # 1. Execução Paralela
-        if progress_callback: progress_callback("Executando varredura profunda...")
-        
-        # Dispara tasks
-        t_sigef = self.infra.buscar_sigef_car(razao_social, [])
-        t_cra = self.financial.mineracao_cra_debentures(razao_social, cnpj_data.get('cnpj', ''))
-        t_tech = self.intel.mapeamento_stack_tecnologico(razao_social, cnpj_data.get('cnpj', ''))
-        t_intel = self.intel.mapeamento_concorrentes(razao_social, [], [])
-        
-        results = await asyncio.gather(t_sigef, t_cra, t_tech, t_intel, return_exceptions=True)
-        
-        # Processa resultados
         sigef_data = results[0] if not isinstance(results[0], Exception) else {}
         cra_data = results[1] if not isinstance(results[1], Exception) else {}
         tech_data = results[2] if not isinstance(results[2], Exception) else {}
-        intel_data = results[3] if not isinstance(results[3], Exception) else {}
-        
-        # 2. Cálculo SAS
+        ind_data = results[3] if not isinstance(results[3], Exception) else {}
+        news_data = results[4] if not isinstance(results[4], Exception) else []
+
+        # 3. Consolidação de Fatos (Sem inferência cega)
         area_total = sigef_data.get('area_total_hectares', 0)
+        faturamento = cra_data.get("faturamento_real", "N/D (Não divulgado)")
         
+        # Se não achou faturamento mas tem ativos gigantes, avisa
+        if faturamento == "N/D (Não divulgado)" and area_total > 0:
+            faturamento = "Não público (Verificar ativos)"
+
+        # 4. Cálculo de Score Técnico (SAS)
         dados_sas = {
             "hectares_total": area_total,
-            "faturamento_estimado": cra_data.get("faturamento_real", 0),
-            "capital_social_estimado": cnpj_data.get("capital_social", 0),
+            "faturamento_estimado": 0, # Zera para não influenciar errado se não tiver balanço
             "tech_stack": tech_data,
-            "funcionarios_estimados": 0 # Pode vir de outra layer
+            "funcionarios_estimados": 0
         }
         
         try:
             sas_result = self.market.calcular_sas(dados_sas)
             sas_score = sas_result.score
             sas_tier = sas_result.tier.value
-            sas_recomendacao = sas_result.recomendacao_comercial
-        except Exception as e:
-            logger.error(f"Erro calculo SAS: {e}")
+        except:
             sas_score = 0
-            sas_tier = "N/D"
-            sas_recomendacao = ""
+            sas_tier = "N/A"
 
-        # 3. Montagem Final (ESTRUTURA ANINHADA)
+        # 5. Montagem do Dossiê Final (Rico em Texto e Links)
         dossie = {
-            "empresa_alvo": razao_social, # CHAVE CRÍTICA
-            "cnpj": cnpj_data.get('cnpj', ''),
+            "empresa_alvo": razao_social,
+            "cnpj": cnpj_info.get('cnpj', ''),
             "sas_score": sas_score,
             "sas_tier": sas_tier,
             
@@ -252,33 +172,57 @@ FORMATO JSON: [{{"cnpj": "...", "razao_social": "...", "tipo": "..."}}]
                 "area_total": area_total,
                 "hectares_total": area_total,
                 "regioes_atuacao": sigef_data.get("estados_operacao", []),
-                "culturas": [],
-                "numero_fazendas": len(sigef_data.get('car_records', []))
+                "numero_fazendas": len(sigef_data.get('car_records', [])),
+                "detalhes_industriais": ind_data # Nova chave rica
             },
             
             "dados_financeiros": {
-                "faturamento_estimado": cra_data.get("faturamento_real", "N/D"),
-                "capital_social_estimado": cnpj_data.get("capital_social", 0),
-                "ebitda_ajustado": cra_data.get("ebitda_consolidado", "N/D")
+                "faturamento_estimado": faturamento,
+                "capital_social_estimado": cnpj_info.get("capital_social", 0),
+                "ebitda_ajustado": cra_data.get("ebitda_consolidado", "N/D"),
+                "fontes_auditoria": "Balanços, CRAs e Mídia Especializada"
             },
             
             "tech_stack": {
-                "erp_principal": tech_data.get("erp_atual", "N/D"),
-                "maturidade_ti": tech_data.get("maturidade_digital", "N/D")
+                "erp_principal": tech_data.get("erp_atual", "Não Identificado (Gap Crítico)"),
+                "maturidade_ti": tech_data.get("maturidade_digital", "Baixa Visibilidade")
             },
             
             "analise_estrategica": {
-                "quem_e_empresa": f"Empresa com {area_total} ha mapeados.",
-                "complexidade_dores": intel_data.get("posicionamento_relativo", ""),
-                "arsenal_recomendado": sas_recomendacao,
-                "plano_ataque": "Verificar oportunidades em digitalização e gestão."
+                "quem_e_empresa": f"Grupo com {area_total} ha mapeados e operação industrial em: {', '.join(ind_data.get('segmentos_atuacao', []))}.",
+                "complexidade_dores": self._gerar_resumo_dores(ind_data, tech_data),
+                "arsenal_recomendado": "Audit: Validar integração Planta Industrial x Campo (ERP + MES)",
+                "plano_ataque": "Usar notícias recentes de expansão como gancho de entrada."
             },
             
-            # Dados brutos
+            # SEÇÃO DE AUDITORIA (NOVA)
+            "auditoria_noticias": news_data,
+            
+            # Dados brutos preservados
             "sigef_car": sigef_data,
-            "cra_debentures": cra_data,
-            "tech_stack_identificado": tech_data
+            "infra_industrial": ind_data
         }
         
-        if progress_callback: progress_callback("Dossiê gerado com sucesso!")
+        if callback: callback("✅ Dossiê de Auditoria gerado com sucesso!")
         return dossie
+
+    def _gerar_resumo_dores(self, ind_data: Dict, tech_data: Dict) -> str:
+        """Gera texto de dores baseado em fatos industriais, não genéricos."""
+        dores = []
+        
+        if ind_data.get("capacidade_armazenagem"):
+            dores.append("Gestão complexa de estoques (Armazéns Gerais) e quebra técnica.")
+            
+        if "Etanol" in str(ind_data.get("segmentos_atuacao", [])):
+            dores.append("Alta complexidade fiscal/industrial (Indústria de Transformação).")
+            
+        erp = tech_data.get("erp_atual", "").lower()
+        if not erp or erp == "n/d":
+            dores.append("Risco crítico de governança por falta de ERP Tier-1 visível.")
+        elif "excel" in erp:
+            dores.append("Operação de alto risco rodando em planilhas/sistemas legados.")
+            
+        if not dores:
+            return "Necessário aprofundamento em reunião (Dores não públicas)."
+            
+        return " | ".join(dores)
