@@ -32,7 +32,6 @@ class SimpleCache:
     def set(self, namespace: str, key: dict, value: Any, ttl: int = 3600):
         cache_key = f"{namespace}:{json.dumps(key, sort_keys=True)}"
         self._cache[cache_key] = value
-        # TTL ignorado por simplicidade (cache infinito na sessão)
 
 cache = SimpleCache()
 
@@ -103,13 +102,9 @@ def _clean_json(text):
     except: return None
 
 def _call(client, prompt, config, prio=Priority.NORMAL):
-    """Executa a chamada ao Gemini (sem fila, direto)."""
+    """Executa a chamada ao Gemini (direto, sem fila)."""
     try:
-        response = client.models.generate_content(
-            model=MODEL, 
-            contents=prompt, 
-            config=config
-        )
+        response = client.models.generate_content(model=MODEL, contents=prompt, config=config)
         return response.text
     except Exception as e:
         logger.error(f"❌ ERRO GEMINI: {e}")
@@ -117,165 +112,212 @@ def _call(client, prompt, config, prio=Priority.NORMAL):
 
 
 # ==============================================================================
-# AGENTE 1: RECON OPERACIONAL (ULTRA-PROFUNDO)
+# AGENTE 1: RECON OPERACIONAL
 # ==============================================================================
 def agent_recon_operacional(client, empresa):
-    ck = {"a":"recon_v5_ultra","e":empresa}
+    ck = {"a":"recon_v5","e":empresa}
     c = cache.get("recon", ck)
     if c: return c
     
     prompt = f"""{RADAR_IDENTITY}
-MISSAO: RECONHECIMENTO OPERACIONAL ULTRA-PROFUNDO (DEEP SCAN MÁXIMO).
+MISSAO: RECONHECIMENTO OPERACIONAL ULTRA-PROFUNDO.
 ALVO: "{empresa}"
-
-INSTRUCOES DETALHADAS:
-
-1. BUSQUE EM MÚLTIPLAS FONTES:
-   - Site oficial da empresa
-   - Relatórios de sustentabilidade (PDF)
-   - Notícias de expansão/aquisições dos últimos 3 anos
-   - Entrevistas com executivos
-   - LinkedIn da empresa
-   - Páginas institucionais
-
-2. IDENTIFIQUE O GRUPO ECONÔMICO:
-   - Se a empresa for filial, identifique a HOLDING MÃE
-   - Busque por "Grupo [Nome]" ou "[Nome] Participações"
-   - Procure por "quem somos" / "institucional"
-
-3. MAPEIE TODAS AS OPERAÇÕES:
-   - Liste TODAS as fazendas/unidades (nome, cidade, UF, hectares)
-   - Some TUDO para obter hectares_total
-   - Identifique TODAS as culturas (não só principais)
-
-4. IDENTIFIQUE INFRAESTRUTURA:
-   - Silos próprios? Quantos? Capacidade?
-   - Algodoeira? Usina? Indústria?
-   - Frota própria? Portos/terminais?
-
-5. TECNOLOGIAS EM USO:
-   - Procure por "tecnologia", "digitalização", "agricultura de precisão"
-   - Busque vagas de emprego que mencionem sistemas (JDLink, Climate FieldView, SAP, etc.)
-
-6. PECUARIA (SE APLICÁVEL):
-   - Cabeças de gado, aves, suínos
-   - Sistemas de confinamento/integração
-
-7. ÁREAS ESPECIAIS:
-   - Área irrigada (pivôs)
-   - Área florestal (eucalipto, teca)
-   - Reserva legal
-
-RETORNE JSON COMPLETO (sem omitir nada):
-{{
-  "nome_grupo": "Nome OFICIAL do grupo/holding",
-  "hectares_total": 0,
-  "culturas": ["Lista COMPLETA de culturas"],
-  "verticalizacao": {{
-    "industria": false,
-    "logistica": false,
-    "comercializacao": false,
-    "pecuaria": false,
-    "florestal": false,
-    "algodoeira": false,
-    "usina_cana": false,
-    "silos": false,
-    "porto_terminal": false,
-    "trading": false
-  }},
-  "regioes_atuacao": ["Estados onde atua"],
-  "numero_fazendas": 0,
-  "fazendas_detalhadas": [
-    {{"nome": "", "cidade": "", "uf": "", "hectares": 0, "culturas": []}}
-  ],
-  "tecnologias_identificadas": ["TODOS os sistemas/tecnologias encontrados"],
-  "cabecas_gado": 0,
-  "cabecas_aves": 0,
-  "cabecas_suinos": 0,
-  "area_florestal_ha": 0,
-  "area_irrigada_ha": 0,
-  "confianca": 0.9
-}}
-
-LEMBRETE: PRECISAO > CUSTO. Faça quantas buscas forem necessárias.
+RETORNE JSON com: nome_grupo, hectares_total, culturas, verticalizacao, regioes_atuacao, fazendas_detalhadas, tecnologias_identificadas, etc.
 """
-
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
-    r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"nome_grupo":empresa,"confianca":0.0}
-    cache.set("recon", ck, r, ttl=7200)
+    r = _clean_json(_call(client, prompt, cfg)) or {"nome_grupo":empresa,"confianca":0.0}
+    cache.set("recon", ck, r)
     return r
 
 
 # ==============================================================================
-# AGENTE 2: SNIPER FINANCEIRO (ULTRA-PROFUNDO)
+# AGENTE 2: SNIPER FINANCEIRO
 # ==============================================================================
 def agent_sniper_financeiro(client, empresa, nome_grupo=""):
     alvo = nome_grupo or empresa
-    ck = {"a":"fin_v5_ultra","e":alvo}
+    ck = {"a":"fin_v5","e":alvo}
     c = cache.get("fin", ck)
     if c: return c
     
     prompt = f"""{RADAR_IDENTITY}
-MISSAO: RASTREAMENTO FINANCEIRO E GOVERNANCA ULTRA-PROFUNDO.
+MISSAO: RASTREAMENTO FINANCEIRO E GOVERNANCA.
 ALVO: "{alvo}"
-
-PROTOCOLO "FOLLOW THE MONEY" (VERSÃO COMPLETA):
-
-1. BUSQUE BALANCOS E DEMONSTRATIVOS:
-   - Site de Relação com Investidores (se listada)
-   - Relatórios anuais PDF
-   - Apresentações institucionais
-   - Notícias sobre resultados financeiros
-
-2. RASTREIE EMISSÕES (CRA, FIAGRO, DEBENTURES):
-   - Busque no site da CVM (Comissão de Valores Mobiliários)
-   - Notícias sobre "emissão de CRA [empresa]"
-   - FIAgros que mencionam a empresa
-
-3. IDENTIFIQUE PARCEIROS FINANCEIROS:
-   - Bancos que financiam (Rabobank, Santander, BB, Sicoob, etc.)
-   - Notícias sobre "financiamento [empresa]"
-   - Contratos de crédito rural
-
-4. AUDITORIAS E GOVERNANCA:
-   - Busque por "auditoria independente [empresa]"
-   - KPMG, Deloitte, PwC, EY?
-   - Comitês de auditoria, conselhos?
-
-5. MOVIMENTACOES RECENTES (M&A, EXPANSAO):
-   - Aquisições de terras nos últimos 2 anos
-   - Compra/venda de ativos
-   - Fusões
-   - Investimentos em novas unidades
-
-6. ESTIMATIVAS:
-   - Se não achar balanço, estime baseado em: hectares x produtividade x preço
-   - Funcionários: busque no LinkedIn quantos funcionários listam a empresa
-
-RETORNE JSON COMPLETO:
-{{
-  "capital_social_estimado": 0,
-  "faturamento_estimado": 0,
-  "funcionarios_estimados": 0,
-  "movimentos_financeiros": [
-    "Lista TODAS as movimentações encontradas (com datas e valores)"
-  ],
-  "fiagros_relacionados": ["Todos os FIAgros encontrados"],
-  "cras_emitidos": ["Todos os CRAs com valores e datas"],
-  "parceiros_financeiros": ["Todos os bancos/instituições"],
-  "auditorias": ["Auditorias externas identificadas"],
-  "governanca_corporativa": false,
-  "resumo_financeiro": "Parágrafo detalhado sobre saúde financeira",
-  "confianca": 0.9
-}}
+RETORNE JSON com: capital_social_estimado, faturamento_estimado, funcionarios_estimados, cras_emitidos, parceiros_financeiros, etc.
 """
-
     cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
-    r = _clean_json(_call(client, prompt, cfg, Priority.HIGH)) or {"confianca":0.0}
-    cache.set("fin", ck, r, ttl=7200)
+    r = _clean_json(_call(client, prompt, cfg)) or {"confianca":0.0}
+    cache.set("fin", ck, r)
     return r
 
 
-# Continuação com os outros agentes... (por questão de espaço, mantenho a estrutura similar)
-# Os demais agentes seguem o mesmo padrão: remover referência a request_queue.execute
+# ==============================================================================
+# AGENTE 3: GRUPO ECONÔMICO
+# ==============================================================================
+def agent_grupo_economico(client, empresa, cnpj_matriz=""):
+    ck = {"a":"grupo_v5","e":empresa}
+    c = cache.get("grupo", ck)
+    if c: return c
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: MAPEAR TEIA CORPORATIVA COMPLETA.
+ALVO: "{empresa}"
+RETORNE JSON com: cnpj_matriz, holding_controladora, cnpjs_filiais, cnpjs_coligadas, controladores, etc.
+"""
+    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
+    r = _clean_json(_call(client, prompt, cfg)) or {"confianca":0.0}
+    cache.set("grupo", ck, r)
+    return r
 
+
+# ==============================================================================
+# AGENTE 4: CADEIA DE VALOR
+# ==============================================================================
+def agent_cadeia_valor(client, empresa, dados_ops):
+    ck = {"a":"cadeia_v5","e":empresa}
+    c = cache.get("cadeia", ck)
+    if c: return c
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: POSICIONAMENTO COMPLETO NA CADEIA DE VALOR.
+ALVO: "{empresa}"
+RETORNE JSON com: posicao_cadeia, clientes_principais, fornecedores_principais, parcerias_estrategicas, certificacoes, etc.
+"""
+    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
+    r = _clean_json(_call(client, prompt, cfg)) or {"confianca":0.0}
+    cache.set("cadeia", ck, r)
+    return r
+
+
+# ==============================================================================
+# AGENTE 5: INTEL MERCADO
+# ==============================================================================
+def agent_intel_mercado(client, empresa, setor_info=""):
+    ck = {"a":"intel_v5","e":empresa}
+    c = cache.get("intel", ck)
+    if c: return c
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: SIGINT - ÚLTIMOS 24 MESES.
+ALVO: "{empresa}"
+RETORNE JSON com: noticias_recentes, sinais_compra, riscos, oportunidades, dores_identificadas, concorrentes, etc.
+"""
+    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.2)
+    r = _clean_json(_call(client, prompt, cfg)) or {"confianca":0.0}
+    cache.set("intel", ck, r)
+    return r
+
+
+# ==============================================================================
+# AGENTE 6: PROFILER DECISORES
+# ==============================================================================
+def agent_profiler_decisores(client, empresa, nome_grupo=""):
+    alvo = nome_grupo or empresa
+    ck = {"a":"decisores_v5","e":alvo}
+    c = cache.get("decisores", ck)
+    if c: return c
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: HUMINT - MAPEAMENTO COMPLETO DE DECISORES.
+ALVO: "{alvo}"
+RETORNE JSON com: decisores (array com nome, cargo, linkedin, email, formacao, etc.), estrutura_decisao, influenciadores.
+"""
+    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
+    r = _clean_json(_call(client, prompt, cfg)) or {"decisores":[],"confianca":0.0}
+    cache.set("decisores", ck, r)
+    return r
+
+
+# ==============================================================================
+# AGENTE 7: TECH STACK
+# ==============================================================================
+def agent_tech_stack(client, empresa, nome_grupo=""):
+    alvo = nome_grupo or empresa
+    ck = {"a":"tech_v5","e":alvo}
+    c = cache.get("tech", ck)
+    if c: return c
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: RECONHECIMENTO COMPLETO DE SISTEMAS.
+ALVO: "{alvo}"
+RETORNE JSON com: erp_principal (dict), outros_sistemas (array), vagas_ti_abertas, nivel_maturidade_ti, gaps_identificados.
+"""
+    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.1)
+    r = _clean_json(_call(client, prompt, cfg)) or {"confianca":0.0}
+    cache.set("tech", ck, r)
+    return r
+
+
+# ==============================================================================
+# AGENTE 8: ANÁLISE ESTRATÉGICA
+# ==============================================================================
+def agent_analise_estrategica(client, dados, sas, contexto=""):
+    prompt = f"""{RADAR_IDENTITY}
+VOCÊ É O OFICIAL DE INTELIGÊNCIA DO PROJETO RADAR.
+GERAR RELATÓRIO DE MISSÃO (BDA).
+
+=== DADOS DO ALVO ===
+{json.dumps(dados, indent=2, ensure_ascii=False, default=str)[:15000]}
+
+=== SCORE SAS ===
+Score: {sas.get('score',0)} — Tier: {sas.get('tier','N/D')}
+
+{PORTFOLIO_SENIOR}
+
+=== ESTRUTURA DO RELATÓRIO (Markdown, separe com |||) ===
+
+SEÇÃO 1 — RECONHECIMENTO DO ALVO (SITUATION REPORT):
+- Visão Raio-X: Tamanho, produção, quem manda.
+- STATUS: "ALVO PRIORITÁRIO" (>5k ha) ou "ALVO TÁTICO".
+
+SEÇÃO 2 — ANÁLISE DE VULNERABILIDADES:
+- Dores (Logística? Fiscal?).
+- Problemas com atual ERP (TOTVS/SAP).
+
+SEÇÃO 3 — ARSENAL RECOMENDADO:
+- Soluções Senior + GAtec específicas.
+- Argumento Matador.
+
+SEÇÃO 4 — PLANO DE VOO:
+- Quem abordar? Qual a isca? Red Flags.
+"""
+    cfg = types.GenerateContentConfig(temperature=0.4)
+    return _call(client, prompt, cfg) or "FALHA NA GERAÇÃO DA ANÁLISE."
+
+
+# ==============================================================================
+# AGENTE 9: AUDITOR DE QUALIDADE
+# ==============================================================================
+def agent_auditor_qualidade(client, texto, dados):
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: DEBRIEFING E CONTROLE DE QUALIDADE.
+
+Avalie (0-10): PRECISÃO, TÁTICA, FIT SENIOR.
+
+Retorne JSON:
+{{"scores":{{"precisao":{{"nota":0,"justificativa":""}},"acionabilidade":{{"nota":0,"justificativa":""}},"fit_senior":{{"nota":0,"justificativa":""}}}},"nota_final":0.0,"nivel":"EXCELENTE|BOM|ACEITAVEL|INSUFICIENTE","recomendacoes":[]}}"""
+    
+    cfg = types.GenerateContentConfig(temperature=0.2)
+    return _clean_json(_call(client, prompt, cfg)) or {"nota_final":0,"nivel":"INSUFICIENTE","recomendacoes":["Erro"]}
+
+
+# ==============================================================================
+# UTILITÁRIO: BUSCA CNPJ
+# ==============================================================================
+def buscar_cnpj_por_nome(client, nome):
+    ck = {"b":nome}
+    c = cache.get("bcnpj", ck)
+    if c: return c
+    
+    prompt = f"""{RADAR_IDENTITY}
+MISSAO: LOCALIZAR CNPJ MATRIZ. ALVO: "{nome}".
+Priorize Holdings. Retorne APENAS CNPJ ou "NAO_ENCONTRADO"."""
+    
+    cfg = types.GenerateContentConfig(tools=[SEARCH], temperature=0.0)
+    text = _call(client, prompt, cfg)
+    if text:
+        m = re.search(r'\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}', text)
+        if m:
+            cnpj = m.group(0)
+            cache.set("bcnpj", ck, cnpj)
+            return cnpj
+    return None
