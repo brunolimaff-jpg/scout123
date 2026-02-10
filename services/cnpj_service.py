@@ -3,11 +3,25 @@ services/cnpj_service.py — BrasilAPI + ReceitaWS com retry
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-import re, requests, time
-from typing import Optional
+import re, requests, time, json
+from typing import Optional, Any
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from scout_types import DadosCNPJ
-from services.cache_service import cache
+
+# ========== CACHE SIMPLES INLINE ==========
+class SimpleCache:
+    def __init__(self):
+        self._cache = {}
+    
+    def get(self, namespace: str, key: dict) -> Optional[Any]:
+        cache_key = f"{namespace}:{json.dumps(key, sort_keys=True)}"
+        return self._cache.get(cache_key)
+    
+    def set(self, namespace: str, key: dict, value: Any, ttl: int = 3600):
+        cache_key = f"{namespace}:{json.dumps(key, sort_keys=True)}"
+        self._cache[cache_key] = value
+
+cache = SimpleCache()
 
 
 def limpar_cnpj(c: str) -> str:
