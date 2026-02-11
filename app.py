@@ -38,6 +38,176 @@ with st.sidebar:
     **Localidade:** Cuiabá, MT
     """)
 
+# Função assíncrona para executar investigação com status
+async def executar_investigacao_com_status(
+    orch, 
+    empresa_nome, 
+    empresa_cnpj, 
+    empresa_uf,
+    status_text,
+    progress_bar,
+    fase_logs
+):
+    """Executa investigação com feedback em tempo real."""
+    
+    start_time = time.time()
+    results = {
+        "metadata": {
+            "empresa": empresa_nome,
+            "cnpj": empresa_cnpj,
+            "uf": empresa_uf,
+            "timestamp_inicio": datetime.now().isoformat(),
+            "versao": "3.0-MODO-DEUS"
+        },
+        "fases": {}
+    }
+    
+    try:
+        # FASE -1: REPUTATION
+        status_text.markdown("⏳ **FASE -1:** Shadow Reputation... (30s max)")
+        progress_bar.progress(10)
+        fase_logs.markdown("""
+        - 🔍 Buscando registros públicos
+        - 📊 Analisando histórico
+        - ⏳ Aguarde...
+        """)
+        
+        try:
+            reputation = await asyncio.wait_for(
+                orch.reputation_layer.checagem_completa(empresa_nome, empresa_cnpj),
+                timeout=30.0
+            )
+            results["fases"]["fase_-1_reputation"] = reputation
+            fase_logs.markdown("- ✅ **FASE -1 COMPLETA** - Reputação verificada")
+        except asyncio.TimeoutError:
+            fase_logs.markdown("- ⚠️ **FASE -1 TIMEOUT** - Continuando...")
+            results["fases"]["fase_-1_reputation"] = {"flag_risco": "TIMEOUT"}
+        
+        # FASE 1: INCENTIVOS
+        status_text.markdown("⏳ **FASE 1:** Incentivos Fiscais... (30s max)")
+        progress_bar.progress(25)
+        fase_logs.markdown("- 🔍 Mapeando incentivos fiscais...")
+        
+        try:
+            incentivos = await asyncio.wait_for(
+                orch.tax_layer.mapeamento_completo(empresa_nome, empresa_cnpj, empresa_uf),
+                timeout=30.0
+            )
+            results["fases"]["fase_1_incentivos"] = incentivos
+            fase_logs.markdown("- ✅ **FASE 1 COMPLETA** - Incentivos mapeados")
+        except asyncio.TimeoutError:
+            fase_logs.markdown("- ⚠️ **FASE 1 TIMEOUT** - Continuando...")
+            results["fases"]["fase_1_incentivos"] = {"incentivos_estaduais": {"total_incentivos": 0}}
+        
+        # FASE 2: TERRITORIAL
+        status_text.markdown("⏳ **FASE 2:** Inteligência Territorial... (30s max)")
+        progress_bar.progress(40)
+        fase_logs.markdown("- 🗺️ Analisando dados territoriais...")
+        
+        try:
+            territorial = await asyncio.wait_for(
+                orch.territorial_layer.mapeamento_territorial_completo(empresa_nome, empresa_cnpj),
+                timeout=30.0
+            )
+            results["fases"]["fase_2_territorial"] = territorial
+            fase_logs.markdown("- ✅ **FASE 2 COMPLETA** - Dados territoriais obtidos")
+        except asyncio.TimeoutError:
+            fase_logs.markdown("- ⚠️ **FASE 2 TIMEOUT** - Continuando...")
+            results["fases"]["fase_2_territorial"] = {"dados_fundiarios": {"area_total_ha": 0}}
+        
+        # FASE 3: LOGÍSTICA
+        status_text.markdown("⏳ **FASE 3:** Logística & Supply Chain... (30s max)")
+        progress_bar.progress(55)
+        fase_logs.markdown("- 🚛 Mapeando logística...")
+        
+        try:
+            logistica = await asyncio.wait_for(
+                orch.logistics_layer.mapeamento_logistico_completo(empresa_nome, empresa_cnpj),
+                timeout=30.0
+            )
+            results["fases"]["fase_3_logistica"] = logistica
+            fase_logs.markdown("- ✅ **FASE 3 COMPLETA** - Logística analisada")
+        except asyncio.TimeoutError:
+            fase_logs.markdown("- ⚠️ **FASE 3 TIMEOUT** - Continuando...")
+            results["fases"]["fase_3_logistica"] = {"armazenagem": {"capacidade_total_toneladas": 0}}
+        
+        # FASE 4: SOCIETÁRIO
+        status_text.markdown("⏳ **FASE 4:** Estrutura Societária... (30s max)")
+        progress_bar.progress(70)
+        fase_logs.markdown("- 🏢 Analisando estrutura societária...")
+        
+        try:
+            societario = await asyncio.wait_for(
+                orch.corporate_layer.mapeamento_societario_completo(empresa_nome, empresa_cnpj, []),
+                timeout=30.0
+            )
+            results["fases"]["fase_4_societario"] = societario
+            fase_logs.markdown("- ✅ **FASE 4 COMPLETA** - Estrutura mapeada")
+        except asyncio.TimeoutError:
+            fase_logs.markdown("- ⚠️ **FASE 4 TIMEOUT** - Continuando...")
+            results["fases"]["fase_4_societario"] = {"estrutura": {"grupo_economico": {}}}
+        
+        # FASE 5: EXECUTIVOS
+        status_text.markdown("⏳ **FASE 5:** Profiling de Executivos... (30s max)")
+        progress_bar.progress(85)
+        fase_logs.markdown("- 👔 Perfilando executivos...")
+        
+        try:
+            executivos = await asyncio.wait_for(
+                orch.executive_profiler.profiling_completo(empresa_nome),
+                timeout=30.0
+            )
+            results["fases"]["fase_5_executivos"] = executivos
+            fase_logs.markdown("- ✅ **FASE 5 COMPLETA** - Executivos perfilados")
+        except asyncio.TimeoutError:
+            fase_logs.markdown("- ⚠️ **FASE 5 TIMEOUT** - Continuando...")
+            results["fases"]["fase_5_executivos"] = {"hierarquia": {}}
+        
+        # FASE 6: TRIGGERS (local, rápido)
+        status_text.markdown("⏳ **FASE 6:** Identificando Triggers...")
+        progress_bar.progress(90)
+        triggers = await orch._identificar_triggers(results)
+        results["fases"]["fase_6_triggers"] = triggers
+        fase_logs.markdown("- ✅ **FASE 6 COMPLETA** - Triggers identificados")
+        
+        # FASE 7: PSICOLOGIA (local, rápido)
+        status_text.markdown("⏳ **FASE 7:** Mapeamento Psicológico...")
+        progress_bar.progress(95)
+        psicologia = await orch._mapear_psicologia(results)
+        results["fases"]["fase_7_psicologia"] = psicologia
+        fase_logs.markdown("- ✅ **FASE 7 COMPLETA** - Perfil psicológico criado")
+        
+        # FASE 10: MATRIZ (local, rápido)
+        status_text.markdown("⏳ **FASE 10:** Calculando Matriz de Priorização...")
+        progress_bar.progress(98)
+        matriz = orch._calcular_matriz_priorizacao(results)
+        results["matriz_priorizacao"] = matriz
+        results["recomendacoes"] = orch._gerar_recomendacoes(results)
+        fase_logs.markdown("- ✅ **FASE 10 COMPLETA** - Matriz calculada")
+        
+        # Finaliza
+        end_time = time.time()
+        duracao = end_time - start_time
+        results["metadata"]["timestamp_fim"] = datetime.now().isoformat()
+        results["metadata"]["duracao_segundos"] = duracao
+        
+        progress_bar.progress(100)
+        status_text.markdown(f"✅ **INVESTIGAÇÃO COMPLETA!** ({duracao:.1f}s)")
+        
+        fase_logs.markdown(f"""
+        ---
+        ### ✅ TODAS AS FASES CONCLUÍDAS
+        
+        **Tempo total:** {duracao:.1f} segundos  
+        **Score final:** {matriz.get('score_final', 0)}/100  
+        **Status:** {matriz.get('status', 'N/D')}
+        """)
+        
+        return results
+        
+    except Exception as e:
+        raise e
+
 # Input
 st.header("🔍 Nova Investigação")
 
@@ -65,148 +235,35 @@ if st.button("🔥 EXECUTAR MODO DEUS", type="primary", use_container_width=True
         
         with status_container:
             st.markdown("### 🔄 EXECUTANDO INVESTIGAÇÃO...")
-            
-            # Placeholder para logs de cada fase
             fase_logs = st.empty()
-            
+        
         try:
             gemini = GeminiService(api_key=api_key)
             orch = BandeiranteOrchestrator(gemini)
             
-            # Inicia tempo
-            start_time = time.time()
-            
-            # FASE -1: REPUTATION
-            status_text.markdown("⏳ **FASE -1:** Shadow Reputation...")
-            progress_bar.progress(10)
-            fase_logs.markdown("""
-            - ✅ Iniciando checagem de reputação
-            - 🔍 Buscando registros públicos
-            - 📊 Analisando histórico
-            """)
-            
-            results = {"metadata": {"empresa": empresa_nome, "cnpj": empresa_cnpj, "uf": empresa_uf or "MT", "timestamp_inicio": datetime.now().isoformat(), "versao": "3.0-MODO-DEUS"}, "fases": {}}
-            
-            # Simula execução com feedback
-            try:
-                # FASE -1
-                status_text.markdown("⏳ **FASE -1:** Shadow Reputation... (30s)")
-                progress_bar.progress(10)
-                reputation = await asyncio.wait_for(
-                    orch.reputation_layer.checagem_completa(empresa_nome, empresa_cnpj),
-                    timeout=30.0
+            # Executa investigação assíncrona
+            results = asyncio.run(
+                executar_investigacao_com_status(
+                    orch,
+                    empresa_nome,
+                    empresa_cnpj,
+                    empresa_uf or "MT",
+                    status_text,
+                    progress_bar,
+                    fase_logs
                 )
-                results["fases"]["fase_-1_reputation"] = reputation
-                fase_logs.markdown("- ✅ **FASE -1 COMPLETA** - Reputation verificada")
-                
-                # FASE 1
-                status_text.markdown("⏳ **FASE 1:** Incentivos Fiscais... (30s)")
-                progress_bar.progress(25)
-                incentivos = await asyncio.wait_for(
-                    orch.tax_layer.mapeamento_completo(empresa_nome, empresa_cnpj, empresa_uf or "MT"),
-                    timeout=30.0
-                )
-                results["fases"]["fase_1_incentivos"] = incentivos
-                fase_logs.markdown("- ✅ **FASE 1 COMPLETA** - Incentivos mapeados")
-                
-                # FASE 2
-                status_text.markdown("⏳ **FASE 2:** Inteligência Territorial... (30s)")
-                progress_bar.progress(40)
-                territorial = await asyncio.wait_for(
-                    orch.territorial_layer.mapeamento_territorial_completo(empresa_nome, empresa_cnpj),
-                    timeout=30.0
-                )
-                results["fases"]["fase_2_territorial"] = territorial
-                fase_logs.markdown("- ✅ **FASE 2 COMPLETA** - Dados territoriais obtidos")
-                
-                # FASE 3
-                status_text.markdown("⏳ **FASE 3:** Logística & Supply Chain... (30s)")
-                progress_bar.progress(55)
-                logistica = await asyncio.wait_for(
-                    orch.logistics_layer.mapeamento_logistico_completo(empresa_nome, empresa_cnpj),
-                    timeout=30.0
-                )
-                results["fases"]["fase_3_logistica"] = logistica
-                fase_logs.markdown("- ✅ **FASE 3 COMPLETA** - Logística analisada")
-                
-                # FASE 4
-                status_text.markdown("⏳ **FASE 4:** Estrutura Societária... (30s)")
-                progress_bar.progress(70)
-                societario = await asyncio.wait_for(
-                    orch.corporate_layer.mapeamento_societario_completo(empresa_nome, empresa_cnpj, []),
-                    timeout=30.0
-                )
-                results["fases"]["fase_4_societario"] = societario
-                fase_logs.markdown("- ✅ **FASE 4 COMPLETA** - Estrutura societária mapeada")
-                
-                # FASE 5
-                status_text.markdown("⏳ **FASE 5:** Profiling de Executivos... (30s)")
-                progress_bar.progress(85)
-                executivos = await asyncio.wait_for(
-                    orch.executive_profiler.profiling_completo(empresa_nome),
-                    timeout=30.0
-                )
-                results["fases"]["fase_5_executivos"] = executivos
-                fase_logs.markdown("- ✅ **FASE 5 COMPLETA** - Executivos perfilados")
-                
-            except asyncio.TimeoutError as te:
-                st.warning(f"⚠️ Timeout na fase: {str(te)}. Continuando com dados parciais...")
+            )
             
-            # FASE 6: Triggers (local, sem API)
-            status_text.markdown("⏳ **FASE 6:** Identificando Triggers...")
-            progress_bar.progress(90)
-            triggers = await orch._identificar_triggers(results)
-            results["fases"]["fase_6_triggers"] = triggers
-            fase_logs.markdown("- ✅ **FASE 6 COMPLETA** - Triggers identificados")
-            
-            # FASE 7: Psicologia (local, sem API)
-            status_text.markdown("⏳ **FASE 7:** Mapeamento Psicológico...")
-            progress_bar.progress(95)
-            psicologia = await orch._mapear_psicologia(results)
-            results["fases"]["fase_7_psicologia"] = psicologia
-            fase_logs.markdown("- ✅ **FASE 7 COMPLETA** - Perfil psicológico criado")
-            
-            # FASE 10: Matriz (local, sem API)
-            status_text.markdown("⏳ **FASE 10:** Calculando Matriz de Priorização...")
-            progress_bar.progress(98)
-            matriz = orch._calcular_matriz_priorizacao(results)
-            results["matriz_priorizacao"] = matriz
-            results["recomendacoes"] = orch._gerar_recomendacoes(results)
-            fase_logs.markdown("- ✅ **FASE 10 COMPLETA** - Matriz calculada")
-            
-            # Finaliza
-            end_time = time.time()
-            duracao = end_time - start_time
-            results["metadata"]["timestamp_fim"] = datetime.now().isoformat()
-            results["metadata"]["duracao_segundos"] = duracao
-            
-            progress_bar.progress(100)
-            status_text.markdown(f"✅ **INVESTIGAÇÃO COMPLETA!** ({duracao:.1f}s)")
-            
-            fase_logs.markdown(f"""
-            ---
-            ### ✅ TODAS AS FASES CONCLUÍDAS
-            
-            **Tempo total:** {duracao:.1f} segundos  
-            **Score final:** {matriz.get('score_final', 0)}/100  
-            **Status:** {matriz.get('status', 'N/D')}
-            """)
+            duracao = results["metadata"].get("duracao_segundos", 0)
             
             st.session_state["results"] = results
             st.session_state["empresa"] = empresa_nome
             st.success(f"✅ Investigação completa em {duracao:.1f}s!")
             st.balloons()
             
-        except asyncio.TimeoutError:
-            st.error("❌ Timeout geral! A investigação demorou mais de 5 minutos.")
-            st.info("💡 Dica: Tente novamente ou verifique sua conexão.")
         except Exception as e:
             st.error(f"❌ Erro durante execução: {str(e)}")
             st.exception(e)
-            if "results" in locals() and results.get("fases"):
-                st.warning("⚠️ Dados parciais foram coletados. Salvando o que foi possível...")
-                st.session_state["results"] = results
-                st.session_state["empresa"] = empresa_nome
 
 st.markdown("---")
 
