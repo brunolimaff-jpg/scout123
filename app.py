@@ -1,4 +1,4 @@
-"""app.py — BANDEIRANTE DIGITAL INTERFACE COM STATUS VISUAL REAL"""
+"""app.py — BANDEIRANTE DIGITAL INTERFACE COM RESUMO DE ACHADOS"""
 
 import streamlit as st
 import asyncio
@@ -40,7 +40,7 @@ with st.sidebar:
 
 # Função para executar com status visual
 async def executar_com_status_visual(orch, empresa_nome, empresa_cnpj, empresa_uf):
-    """Executa investigação com status visual em tempo real."""
+    """Executa investigação com status visual e resumo de achados."""
     
     start_time = time.time()
     results = {
@@ -61,7 +61,16 @@ async def executar_com_status_visual(orch, empresa_nome, empresa_cnpj, empresa_u
         try:
             reputation = await orch.reputation_layer.checagem_completa(empresa_nome, empresa_cnpj)
             results["fases"]["fase_-1_reputation"] = reputation
-            st.write("✅ Reputation verificada!")
+            
+            # RESUMO DE ACHADOS
+            st.write("")
+            st.write("✅ **Reputation verificada!**")
+            st.write("📊 **Principais achados:**")
+            flag = reputation.get("flag_risco", "N/D")
+            processos = reputation.get("processos_judiciais", {}).get("total", 0)
+            st.write(f"  • Flag de risco: **{flag}**")
+            st.write(f"  • Processos judiciais: **{processos}**")
+            
             status.update(label="✅ FASE -1 COMPLETA", state="complete")
         except Exception as e:
             st.write(f"⚠️ Erro: {str(e)}")
@@ -71,12 +80,23 @@ async def executar_com_status_visual(orch, empresa_nome, empresa_cnpj, empresa_u
     # FASE 1: INCENTIVOS
     with st.status("💰 **FASE 1:** Incentivos Fiscais", expanded=True) as status:
         st.write("🔍 Mapeando incentivos estaduais...")
-        st.write("📊 Verificando sancões e multas...")
+        st.write("📊 Verificando sanções e multas...")
         try:
             incentivos = await orch.tax_layer.mapeamento_completo(empresa_nome, empresa_cnpj, empresa_uf)
             results["fases"]["fase_1_incentivos"] = incentivos
-            total = incentivos.get("incentivos_estaduais", {}).get("total_incentivos", 0)
-            st.write(f"✅ Encontrados {total} incentivos!")
+            
+            # RESUMO DE ACHADOS
+            st.write("")
+            total_inc = incentivos.get("incentivos_estaduais", {}).get("total_incentivos", 0)
+            valor_anual = incentivos.get("incentivos_estaduais", {}).get("valor_beneficio_anual_estimado", "N/D")
+            multas = incentivos.get("sancoes_multas", {}).get("total_multas_quantidade", 0)
+            
+            st.write("✅ **Incentivos mapeados!**")
+            st.write("📊 **Principais achados:**")
+            st.write(f"  • Incentivos fiscais: **{total_inc}**")
+            st.write(f"  • Benefício anual estimado: **{valor_anual}**")
+            st.write(f"  • Multas fiscais: **{multas}**")
+            
             status.update(label="✅ FASE 1 COMPLETA", state="complete")
         except Exception as e:
             st.write(f"⚠️ Erro: {str(e)}")
@@ -87,12 +107,27 @@ async def executar_com_status_visual(orch, empresa_nome, empresa_cnpj, empresa_u
     with st.status("🗺️ **FASE 2:** Inteligência Territorial", expanded=True) as status:
         st.write("🔍 Buscando dados fundiários no INCRA...")
         st.write("🌳 Verificando licenças ambientais...")
-        st.write("📍 Analisando adjacencias e logística...")
+        st.write("📍 Analisando adjacências e logística...")
         try:
             territorial = await orch.territorial_layer.mapeamento_territorial_completo(empresa_nome, empresa_cnpj)
             results["fases"]["fase_2_territorial"] = territorial
-            area = territorial.get("dados_fundiarios", {}).get("area_total_ha", 0)
-            st.write(f"✅ Área total identificada: {area:,.0f} hectares!")
+            
+            # RESUMO DE ACHADOS
+            st.write("")
+            fundiario = territorial.get("dados_fundiarios", {})
+            area = fundiario.get("area_total_ha", 0)
+            total_imoveis = fundiario.get("total_imoveis", 0)
+            estados = fundiario.get("estados_presenca", [])
+            licencas_total = territorial.get("licencas_ambientais", {}).get("total_licencas", 0)
+            licencas_recentes = territorial.get("licencas_ambientais", {}).get("licencas_recentes_6m", 0)
+            
+            st.write("✅ **Dados territoriais obtidos!**")
+            st.write("📊 **Principais achados:**")
+            st.write(f"  • Área total: **{area:,.0f} hectares**")
+            st.write(f"  • Total de imóveis: **{total_imoveis}**")
+            st.write(f"  • Estados presença: **{', '.join(estados) if estados else 'N/D'}**")
+            st.write(f"  • Licenças ambientais: **{licencas_total}** ({licencas_recentes} recentes)")
+            
             status.update(label="✅ FASE 2 COMPLETA", state="complete")
         except Exception as e:
             st.write(f"⚠️ Erro: {str(e)}")
@@ -106,8 +141,23 @@ async def executar_com_status_visual(orch, empresa_nome, empresa_cnpj, empresa_u
         try:
             logistica = await orch.logistics_layer.mapeamento_logistico_completo(empresa_nome, empresa_cnpj)
             results["fases"]["fase_3_logistica"] = logistica
-            capacidade = logistica.get("armazenagem", {}).get("capacidade_total_toneladas", 0)
-            st.write(f"✅ Capacidade de armazenagem: {capacidade:,.0f} toneladas!")
+            
+            # RESUMO DE ACHADOS
+            st.write("")
+            armazenagem = logistica.get("armazenagem", {})
+            capacidade = armazenagem.get("capacidade_total_toneladas", 0)
+            unidades = armazenagem.get("total_unidades", 0)
+            frota = logistica.get("frota_logistica", {})
+            rntrc_ativo = frota.get("rntrc", {}).get("ativo", False)
+            veiculos = frota.get("rntrc", {}).get("quantidade_veiculos", 0)
+            
+            st.write("✅ **Logística analisada!**")
+            st.write("📊 **Principais achados:**")
+            st.write(f"  • Capacidade armazenagem: **{capacidade:,.0f} toneladas**")
+            st.write(f"  • Unidades de armazenagem: **{unidades}**")
+            st.write(f"  • RNTRC: **{'Ativo' if rntrc_ativo else 'Inativo'}**")
+            st.write(f"  • Veículos cadastrados: **{veiculos}**")
+            
             status.update(label="✅ FASE 3 COMPLETA", state="complete")
         except Exception as e:
             st.write(f"⚠️ Erro: {str(e)}")
@@ -121,8 +171,21 @@ async def executar_com_status_visual(orch, empresa_nome, empresa_cnpj, empresa_u
         try:
             societario = await orch.corporate_layer.mapeamento_societario_completo(empresa_nome, empresa_cnpj, [])
             results["fases"]["fase_4_societario"] = societario
-            total_empresas = societario.get("estrutura", {}).get("grupo_economico", {}).get("total_empresas_grupo", 0)
-            st.write(f"✅ Grupo com {total_empresas} empresas identificadas!")
+            
+            # RESUMO DE ACHADOS
+            st.write("")
+            estrutura = societario.get("estrutura", {})
+            grupo = estrutura.get("grupo_economico", {})
+            total_empresas = grupo.get("total_empresas_grupo", 0)
+            holding = grupo.get("holding_controladora", "N/D")
+            capital = grupo.get("capital_social_total_grupo", "N/D")
+            
+            st.write("✅ **Estrutura mapeada!**")
+            st.write("📊 **Principais achados:**")
+            st.write(f"  • Holding controladora: **{holding}**")
+            st.write(f"  • Total de empresas: **{total_empresas}**")
+            st.write(f"  • Capital social total: **{capital}**")
+            
             status.update(label="✅ FASE 4 COMPLETA", state="complete")
         except Exception as e:
             st.write(f"⚠️ Erro: {str(e)}")
@@ -136,7 +199,20 @@ async def executar_com_status_visual(orch, empresa_nome, empresa_cnpj, empresa_u
         try:
             executivos = await orch.executive_profiler.profiling_completo(empresa_nome)
             results["fases"]["fase_5_executivos"] = executivos
-            st.write("✅ Executivos mapeados!")
+            
+            # RESUMO DE ACHADOS
+            st.write("")
+            hierarquia = executivos.get("hierarquia", {})
+            tem_ti = hierarquia.get("tem_area_ti", False)
+            tipo_decisao = hierarquia.get("tipo_decisao", "N/D")
+            vagas_ti = len(hierarquia.get("vagas_ti_abertas", []))
+            
+            st.write("✅ **Executivos mapeados!**")
+            st.write("📊 **Principais achados:**")
+            st.write(f"  • Área de TI: **{'Sim' if tem_ti else 'Não'}**")
+            st.write(f"  • Tipo de decisão: **{tipo_decisao}**")
+            st.write(f"  • Vagas TI abertas: **{vagas_ti}**")
+            
             status.update(label="✅ FASE 5 COMPLETA", state="complete")
         except Exception as e:
             st.write(f"⚠️ Erro: {str(e)}")
@@ -148,7 +224,10 @@ async def executar_com_status_visual(orch, empresa_nome, empresa_cnpj, empresa_u
         st.write("🔍 Analisando contexto sazonal...")
         triggers = await orch._identificar_triggers(results)
         results["fases"]["fase_6_triggers"] = triggers
-        st.write("✅ Triggers identificados!")
+        
+        total_triggers = triggers.get("total_triggers", 0)
+        urgencia = triggers.get("urgencia_geral", "N/D")
+        st.write(f"✅ **{total_triggers} trigger(s) identificado(s)** | Urgência: **{urgencia}**")
         status.update(label="✅ FASE 6 COMPLETA", state="complete")
     
     # FASE 7: PSICOLOGIA
@@ -156,7 +235,10 @@ async def executar_com_status_visual(orch, empresa_nome, empresa_cnpj, empresa_u
         st.write("🔍 Definindo gatilhos e abordagem...")
         psicologia = await orch._mapear_psicologia(results)
         results["fases"]["fase_7_psicologia"] = psicologia
-        st.write("✅ Perfil psicológico definido!")
+        
+        gatilho = psicologia.get("gatilho_psicologico", "N/D")
+        canal = psicologia.get("canal_preferido", "N/D")
+        st.write(f"✅ **Gatilho:** {gatilho} | **Canal:** {canal}")
         status.update(label="✅ FASE 7 COMPLETA", state="complete")
     
     # FASE 10: MATRIZ
@@ -165,7 +247,10 @@ async def executar_com_status_visual(orch, empresa_nome, empresa_cnpj, empresa_u
         matriz = orch._calcular_matriz_priorizacao(results)
         results["matriz_priorizacao"] = matriz
         results["recomendacoes"] = orch._gerar_recomendacoes(results)
-        st.write(f"✅ Score final: {matriz.get('score_final', 0)}/100")
+        
+        score = matriz.get('score_final', 0)
+        status_final = matriz.get('status', 'N/D')
+        st.write(f"✅ **Score: {score}/100** | **Status: {status_final}**")
         status.update(label="✅ FASE 10 COMPLETA", state="complete")
     
     # Finaliza
