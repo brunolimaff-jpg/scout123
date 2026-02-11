@@ -1,6 +1,6 @@
 """
-services/dossier_orchestrator.py — MODO PROTOCOLO BRUNO LIMA (ESTILO CIRO)
-Gera o relatório com tom de Auditoria Forense, buscando contradições e dados duros.
+services/dossier_orchestrator.py — VERSÃO ESTÁVEL (CORREÇÃO ERP_KEY)
+Corrige o erro de chave 'erp_principal' normalizando os dados antes da chamada do Protocolo Ciro.
 """
 import asyncio
 import logging
@@ -33,69 +33,71 @@ class DossierOrchestrator:
 
     async def _gerar_relatorio_ciro(self, dados_consolidados: Dict) -> str:
         """
-        Gera o texto 'Análise Estratégica' no estilo CIRO:
-        Forense, Agressivo, Focado em Contradições e Oportunidades.
+        Gera o texto 'Análise Estratégica' no estilo CIRO.
         """
         logger.info(f"[Orchestrator] Gerando Relatório Protocolo Bruno Lima para: {dados_consolidados['empresa_alvo']}")
+        
+        # Extração segura para evitar KeyErrors no prompt f-string
+        empresa = dados_consolidados.get('empresa_alvo', 'Alvo')
+        area = dados_consolidados.get('dados_operacionais', {}).get('area_total', 0)
+        faturamento = dados_consolidados.get('dados_financeiros', {}).get('faturamento_estimado', 'N/D')
+        infra = str(dados_consolidados.get('dados_operacionais', {}).get('detalhes_industriais', {}))[:500]
+        # AQUI ESTAVA O ERRO ANTERIOR -> Agora usa .get() seguro
+        erp = dados_consolidados.get('tech_stack', {}).get('erp_principal', 'Não Identificado')
+        noticias = str(dados_consolidados.get('auditoria_noticias', []))[:800]
+        org = str(dados_consolidados.get('dados_organizacionais', {}))[:800]
         
         prompt = f"""
         ATUE COMO: CIRO, O AUDITOR FORENSE DE VENDAS (Expert em Agronegócio e TI).
         
         DADOS DA VÍTIMA (ALVO):
-        - Nome: {dados_consolidados['empresa_alvo']}
-        - Área: {dados_consolidados['dados_operacionais']['area_total']} hectares (Isso define o porte).
-        - Faturamento Real/Estimado: {dados_consolidados['dados_financeiros']['faturamento_estimado']}
-        - Infra Industrial: {dados_consolidados['dados_operacionais']['detalhes_industriais']}
-        - ERP Identificado: {dados_consolidados['tech_stack']['erp_principal']}
-        - Notícias/Escândalos: {str(dados_consolidados['auditoria_noticias'])[:1000]}
-        - Decisores/Vagas: {str(dados_consolidados['dados_organizacionais'])}
+        - Nome: {empresa}
+        - Área: {area} hectares.
+        - Faturamento Real/Estimado: {faturamento}
+        - Infra Industrial: {infra}
+        - ERP Identificado: {erp}
+        - Notícias/Escândalos: {noticias}
+        - Decisores/Vagas: {org}
         
         SUA MISSÃO: Escrever o "PROTOCOLO BRUNO LIMA" (Relatório de Inteligência).
         
         TOM DE VOZ:
         - Use termos como: "Smoking Gun", "Frankenstein Tecnológico", "Auditoria Forense", "Dívida", "CRA", "Big 4".
-        - Seja cético. Se eles dizem que usam SAP mas tem vaga pra Totvs, aponte a mentira.
-        - Se o faturamento é alto, assuma que são auditados por Big 4 (KPMG/Deloitte/PwC) e use isso.
+        - Seja cético e analítico.
         
         ESTRUTURA OBRIGATÓRIA DA RESPOSTA (Markdown):
         
-        # 🕵️‍♂️ DOSSIÊ DE INTELIGÊNCIA: {dados_consolidados['empresa_alvo']}
-        **STATUS:** [Defina: ALTO VALOR ESTRATÉGICO / RISCO DE CHURN / BIG FISH]
-        **RESUMO DO ESPIÃO:** [Uma frase de impacto resumindo a bagunça tecnológica ou a oportunidade de ouro].
+        # 🕵️‍♂️ DOSSIÊ DE INTELIGÊNCIA: {empresa}
+        **STATUS:** [ALTO VALOR ESTRATÉGICO / RISCO DE CHURN / BIG FISH]
+        **RESUMO DO ESPIÃO:** [Resumo de impacto].
         
         ## 1. 🧬 RAIO-X CORPORATIVO (HARD DATA)
-        * **Faturamento:** [Valor] (Fonte: Auditoria Digital).
-        * **Porte Real:** [Área] ha → Isso exige governança de [Nível].
-        * **Saúde/Auditoria:** [Se faturar >300M, diga que provável emissor de CRA e auditado. Se achar notícias de dívida, cite].
+        * **Faturamento:** {faturamento} (Fonte: Auditoria Digital).
+        * **Porte Real:** {area} ha.
         
         ## 2. 🚜 INFRAESTRUTURA (ATIVOS OCULTOS)
-        * **Fábricas a Céu Aberto:** [Liste Algodoeiras, UBS, Armazéns encontrados].
-        * **O Pulo do Gato:** [Explique por que o ERP atual falha em gerir esses ativos industriais. Ex: "GAtec não faz PCP de algodoeira"].
+        * **Fábricas a Céu Aberto:** [Liste Algodoeiras, UBS, Armazéns encontrados na infra].
         
         ## 3. 💻 A "SMOKING GUN" (TECNOLOGIA)
-        * **O Cenário:** Identificamos ERP [{dados_consolidados['tech_stack']['erp_principal']}].
-        * **A Contradição:** [Se tiver vaga de outro sistema, aponte. Se não tiver ERP, chame de "Caixa Preta". Se tiver Senior, elogie mas aponte brechas].
-        * **Veredito:** [É um Frankenstein? É uma planilha de luxo?]
+        * **O Cenário:** Identificamos ERP [{erp}].
+        * **A Contradição:** [Analise se o ERP é compatível com o porte. Se for Senior, elogie mas aponte brechas de módulos. Se for Totvs/Outro, ataque].
         
         ## 4. 🎯 OPPORTUNITY MAP (PLANO DE GUERRA)
         | Vertical | O Fato (Evidência) | O Argumento de Venda (Pitch Matador) |
         |---|---|---|
-        | Backoffice | [Ex: Usam Totvs/Excel] | [Argumento de unificação/TCO] |
-        | Agro | [Ex: Usam GAtec/Outro] | [Argumento de integração nativa] |
-        | Indústria | [Tem Algodoeira/Silo] | "Transforme o beneficiamento em Indústria 4.0" |
-        | Fintech | [Muitos funcionários] | "Bancarize a safra com Wiipo" |
+        | Backoffice | [ERP Atual] | [Argumento] |
+        | Agro | [Gestão Campo] | [Argumento] |
         
         ## 📝 SCRIPT PARA O EXECUTIVO (Copie e Cole)
-        > [Escreva uma mensagem de WhatsApp curta, grossa e baseada em dados para o Diretor, citando a auditoria e o problema técnico encontrado].
+        > [Mensagem de WhatsApp curta e agressiva para o Diretor].
         """
         
         try:
-            # Temperatura um pouco mais alta (0.4) para ele ser criativo nos argumentos, mas fiel aos dados
             response = await self.gemini.call_with_retry(prompt, max_retries=2, use_search=False, temperature=0.4)
             return response
         except Exception as e:
             logger.error(f"Erro ao gerar relatório Ciro: {e}")
-            return "Relatório Forense indisponível. Dados insuficientes para análise de profundidade."
+            return "Relatório Forense indisponível. Dados insuficientes."
 
     async def executar_dosier_completo(self, razao_social: str, cnpj: str = "", callback=None) -> Dict:
         """Pipeline Auditoria Total com Saída 'Ciro'."""
@@ -111,14 +113,14 @@ class DossierOrchestrator:
             if c_data:
                 cnpj_info = {"cnpj": c_data.cnpj, "capital_social": c_data.capital_social, "nome": c_data.razao_social}
         
-        # 2. Execução Paralela (Coleta de Evidências)
+        # 2. Execução Paralela
         if callback: callback("📡 Coletando evidências forenses (Balanços, Vagas, Terras)...")
         
         t_infra = self.infra.buscar_sigef_car(razao_social, [])
         t_fin = self.financial.mineracao_cra_debentures(razao_social, cnpj_info.get('cnpj', ''))
         t_tech = self.intel.mapeamento_stack_tecnologico(razao_social, "")
-        t_ind = self._investigacao_industrial(razao_social) # Metodo interno existente
-        t_news = self._buscar_noticias_relevantes(razao_social) # Metodo interno existente
+        t_ind = self._investigacao_industrial(razao_social)
+        t_news = self._buscar_noticias_relevantes(razao_social)
         t_people = self.intel.mapeamento_decisores(razao_social)
         t_capex = self.intel.mapeamento_investimentos_capex(razao_social)
         
@@ -137,7 +139,6 @@ class DossierOrchestrator:
         faturamento = cra_data.get("faturamento_real", "N/D")
         
         if faturamento == "N/D" and area_total > 0:
-            # Fallback se não achar balanço: Estimativa Forense
             faturamento = f"R$ {area_total * 12000 / 1_000_000:,.0f} Milhões (Estimativa Forense)"
 
         # 4. Score Técnico
@@ -155,7 +156,14 @@ class DossierOrchestrator:
             sas_score = 0
             sas_tier = "N/A"
 
-        # 5. Estrutura de Dados Intermediária
+        # 5. Estrutura de Dados Intermediária (NORMALIZADA)
+        # CORREÇÃO: Mapeia 'erp_atual' para 'erp_principal' AQUI
+        tech_normalized = {
+            "erp_principal": tech_data.get("erp_atual", "N/D"),
+            "maturidade_ti": tech_data.get("maturidade_digital", "N/D"),
+            "infra_nuvem": tech_data.get("infra_nuvem", "N/D")
+        }
+
         dados_consolidados = {
             "empresa_alvo": razao_social,
             "dados_operacionais": {
@@ -165,7 +173,7 @@ class DossierOrchestrator:
             "dados_financeiros": {
                 "faturamento_estimado": faturamento
             },
-            "tech_stack": tech_data,
+            "tech_stack": tech_normalized, # Usa o dicionário normalizado
             "auditoria_noticias": news_data,
             "dados_organizacionais": {
                 "decisores": people_data,
@@ -173,7 +181,7 @@ class DossierOrchestrator:
             }
         }
 
-        # 6. GERAÇÃO DO RELATÓRIO "CIRO" (O Grande Diferencial)
+        # 6. Geração do Relatório Ciro
         if callback: callback("🧠 Processando Dossiê Forense (Protocolo Bruno Lima)...")
         analise_ciro = await self._gerar_relatorio_ciro(dados_consolidados)
 
@@ -184,23 +192,21 @@ class DossierOrchestrator:
             "sas_score": sas_score,
             "sas_tier": sas_tier,
             
-            # Dados estruturados para o PDF
             "dados_operacionais": {
                 "area_total": area_total,
                 "regioes_atuacao": sigef_data.get("estados_operacao", []),
-                "numero_fazendas": len(sigef_data.get('car_records', []))
+                "numero_fazendas": len(sigef_data.get('car_records', [])),
+                "detalhes_industriais": ind_data
             },
             
             "dados_financeiros": {
                 "faturamento_estimado": faturamento,
                 "capital_social_estimado": cnpj_info.get("capital_social", 0),
-                "ebitda_ajustado": cra_data.get("ebitda_consolidado", "N/D")
+                "ebitda_ajustado": cra_data.get("ebitda_consolidado", "N/D"),
+                "fontes_auditoria": "Auditoria Digital"
             },
             
-            "tech_stack": {
-                "erp_principal": tech_data.get("erp_atual", "N/D"),
-                "maturidade_ti": tech_data.get("maturidade_digital", "N/D")
-            },
+            "tech_stack": tech_normalized,
             
             "dados_organizacionais": {
                 "quadro_estimado": people_data.get("estimativa_funcionarios", "N/D"),
@@ -208,13 +214,9 @@ class DossierOrchestrator:
                 "investimentos_futuros": capex_data
             },
             
-            # AQUI ESTÁ A MÁGICA: O Texto do Ciro vai direto para a Análise Estratégica
             "analise_estrategica": {
-                "quem_e_empresa": "Ver Relatório Forense Abaixo", # Placeholder
-                "complexidade_dores": "Ver Relatório Forense Abaixo",
-                "arsenal_recomendado": "Ver Relatório Forense Abaixo",
-                "plano_ataque": "Ver Relatório Forense Abaixo",
-                "relatorio_completo_ciro": analise_ciro # Nova chave para o frontend exibir
+                "quem_e_empresa": "Ver Relatório Forense Abaixo",
+                "relatorio_completo_ciro": analise_ciro
             },
             
             "auditoria_noticias": news_data,
@@ -225,9 +227,8 @@ class DossierOrchestrator:
         if callback: callback("✅ Dossiê Forense concluído.")
         return dossie
 
-    # Métodos auxiliares (mantidos para o código funcionar)
+    # Helpers
     async def _buscar_noticias_relevantes(self, nome_alvo: str) -> List[Dict]:
-        """(Mantido do código anterior - Auditoria de Notícias)"""
         prompt = f"ATUE COMO: Auditor. ALVO: {nome_alvo}. Busque 5 notícias recentes (Investimentos, Crimes, M&A). JSON: [{{'titulo':..., 'fonte':..., 'data':..., 'link':...}}]"
         try:
             response = await self.gemini.call_with_retry(prompt, use_search=True, temperature=0.1)
@@ -237,7 +238,6 @@ class DossierOrchestrator:
         except: return []
 
     async def _investigacao_industrial(self, nome_alvo: str) -> Dict:
-        """(Mantido do código anterior - Auditoria Industrial)"""
         prompt = f"ATUE COMO: Engenheiro. ALVO: {nome_alvo}. Liste capacidade de silos, usinas, algodoeiras. JSON: {{'capacidade_armazenagem':..., 'plantas_industriais':...}}"
         try:
             response = await self.gemini.call_with_retry(prompt, use_search=True, temperature=0.1)
