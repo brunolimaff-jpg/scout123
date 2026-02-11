@@ -1,6 +1,6 @@
 """
 utils/export_handler.py — Gerador de Relatórios (PDF/JSON)
-Adaptado para Protocolo Bruno Lima (Relatório Forense Ciro)
+Versão Blindada: Corrige o erro de 'TypeError' na geração da capa e mantém o relatório Ciro completo.
 """
 import json
 import io
@@ -8,7 +8,6 @@ from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
-from reportlab.lib.utils import ImageReader
 
 class ExportHandler:
     def __init__(self):
@@ -34,8 +33,7 @@ class ExportHandler:
         return buffer.getvalue()
 
     def _cabecalho_padrao(self, c, dossie, titulo_pag="INTELLIGENCE REPORT"):
-        """Cabeçalho padrão para todas as páginas."""
-        # Faixa superior
+        """Cabeçalho padrão."""
         c.setFillColor(colors.darkblue)
         c.rect(0, self.height - 50, self.width, 50, fill=True, stroke=False)
         
@@ -43,12 +41,11 @@ class ExportHandler:
         c.setFont("Helvetica-Bold", 14)
         c.drawString(30, self.height - 35, f"RADAR FOX-3 | {titulo_pag}")
         
-        # Subtítulo com Data e Alvo
         data_str = datetime.now().strftime("%d/%m/%Y %H:%M")
         sas_score = dossie.get('sas_score', 'N/A')
         sas_tier = dossie.get('sas_tier', 'N/A')
         
-        subtitulo = f"ALVO: {dossie.get('empresa_alvo', 'ALVO DESCONHECIDO')} | SCORE SAS: {sas_score} ({sas_tier}) | DATA: {data_str}"
+        subtitulo = f"ALVO: {dossie.get('empresa_alvo', 'ALVO')} | SCORE SAS: {sas_score} ({sas_tier}) | DATA: {data_str}"
         c.setFont("Helvetica", 9)
         c.drawString(30, self.height - 48, subtitulo)
 
@@ -58,18 +55,24 @@ class ExportHandler:
         
         y = self.height - 100
         
-        # Indicadores Principais (Cards)
-        dados_ops = dossie.get('dados_operacionais', {})
-        dados_fin = dossie.get('dados_financeiros', {})
-        tech = dossie.get('tech_stack', {})
+        # Indicadores Principais
+        dados_ops = dossie.get('dados_operacionais', {}) or {}
+        dados_fin = dossie.get('dados_financeiros', {}) or {}
+        tech = dossie.get('tech_stack', {}) or {}
         
+        # Tratamento seguro de área
+        area = dados_ops.get('area_total', 0)
+        if area is None: area = 0
+        
+        faturamento = str(dados_fin.get('faturamento_estimado', 'N/D'))
+        erp = str(tech.get('erp_principal', 'N/D'))
+
         indicadores = [
-            ("Área Total", f"{dados_ops.get('area_total', 0):,.0f} ha"),
-            ("Faturamento", str(dados_fin.get('faturamento_estimado', 'N/D'))[:30]), # Limita tamanho
-            ("ERP Principal", str(tech.get('erp_principal', 'N/D')))
+            ("Área Total", f"{area:,.0f} ha"),
+            ("Faturamento", faturamento[:30]), 
+            ("ERP Principal", erp[:25])
         ]
         
-        # Desenha "Cartões"
         x_start = 50
         for titulo, valor in indicadores:
             c.setStrokeColor(colors.lightgrey)
@@ -80,17 +83,14 @@ class ExportHandler:
             c.drawString(x_start + 10, y - 25, titulo)
             
             c.setFillColor(colors.black)
-            c.setFont("Helvetica-Bold", 12)
-            # Ajusta fonte se valor for longo
-            if len(str(valor)) > 15:
-                c.setFont("Helvetica-Bold", 9)
+            c.setFont("Helvetica-Bold", 10) # Fonte menor para evitar quebras
             c.drawString(x_start + 10, y - 45, str(valor))
             
             x_start += 170
 
         y -= 100
         
-        # Detalhes Operacionais
+        # Detalhes Industriais (ONDE O ERRO ACONTECIA)
         c.setFont("Helvetica-Bold", 12)
         c.drawString(50, y, "DETALHES OPERACIONAIS & INDUSTRIAIS")
         y -= 20
@@ -98,15 +98,22 @@ class ExportHandler:
         y -= 20
         
         c.setFont("Helvetica", 10)
-        ind = dados_ops.get('detalhes_industriais', {})
-        if ind:
-            details = [
-                f"Armazenagem: {ind.get('capacidade_armazenagem', 'N/D')}",
-                f"Plantas: {', '.join(ind.get('plantas_industriais', [])[:3])}", # Max 3
-                f"Segmentos: {', '.join(ind.get('segmentos_atuacao', []))}"
-            ]
-        else:
-            details = ["Nenhuma infraestrutura industrial pública identificada."]
+        ind = dados_ops.get('detalhes_industriais', {}) or {}
+        
+        # BLINDAGEM: Garante que é lista antes de fazer join
+        plantas_list = ind.get('plantas_industriais')
+        if not isinstance(plantas_list, list): plantas_list = []
+        plantas_str = [str(p) for p in plantas_list if p] # Remove Nones
+        
+        segmentos_list = ind.get('segmentos_atuacao')
+        if not isinstance(segmentos_list, list): segmentos_list = []
+        segmentos_str = [str(s) for s in segmentos_list if s]
+
+        details = [
+            f"Armazenagem: {ind.get('capacidade_armazenagem', 'N/D')}",
+            f"Plantas: {', '.join(plantas_str[:3])}", # Agora seguro
+            f"Segmentos: {', '.join(segmentos_str)}"
+        ]
             
         for d in details:
             c.drawString(50, y, f"• {d}")
@@ -122,12 +129,13 @@ class ExportHandler:
         y -= 20
         
         c.setFont("Helvetica", 10)
-        org = dossie.get('dados_organizacionais', {})
-        people = org.get('decisores_chave', {})
+        org = dossie.get('dados_organizacionais', {}) or {}
+        people = org.get('decisores_chave', {}) or {}
         
-        if people:
-            diretoria = people.get('diretoria', [])[:3]
-            for p in diretoria:
+        # BLINDAGEM Decisores
+        diretoria = people.get('diretoria')
+        if isinstance(diretoria, list) and diretoria:
+            for p in diretoria[:5]: # Max 5 nomes
                 c.drawString(50, y, f"• {p}")
                 y -= 15
         else:
@@ -136,38 +144,34 @@ class ExportHandler:
         c.showPage()
 
     def _adicionar_analise_estrategica(self, c, dossie):
-        """Página 2: O Relatório Forense (Protocolo Bruno Lima)."""
+        """Página 2: Relatório Ciro Completo (Mantido Integralmente)."""
         self._cabecalho_padrao(c, dossie, "ANÁLISE ESTRATÉGICA FORENSE")
         
         y = self.height - 80
         margin = 50
         max_width = self.width - 2 * margin
         
-        # Tenta pegar o texto do Ciro
+        # Pega o texto gerado pelo Ciro
         texto_ciro = dossie.get("analise_estrategica", {}).get("relatorio_completo_ciro", "")
-        
-        # Fallback se não tiver Ciro
         if not texto_ciro:
             texto_ciro = "Relatório Forense indisponível. Consulte a versão web."
 
-        # Processamento de Texto para PDF (Quebra de Linha Básica)
         c.setFont("Helvetica", 10)
         c.setFillColor(colors.black)
         
         lines = texto_ciro.split('\n')
         
         for line in lines:
-            # Tratamento básico de Markdown
+            # Tratamento de Markdown simples para PDF
             is_bold = "**" in line or "##" in line
             clean_line = line.replace("**", "").replace("## ", "").replace("# ", "").replace("🕵️‍♂️", "").replace("🧬", "")
             
             if is_bold:
                 c.setFont("Helvetica-Bold", 10)
-                y -= 5 # Extra space before header
+                y -= 5
             else:
                 c.setFont("Helvetica", 10)
             
-            # Word wrap manual
             words = clean_line.split()
             current_line = ""
             
@@ -182,18 +186,15 @@ class ExportHandler:
                     y -= 14
                     current_line = word
                     
-                    # Nova página se acabar espaço
                     if y < 50:
                         c.showPage()
                         self._cabecalho_padrao(c, dossie, "ANÁLISE FORENSE (CONT.)")
                         y = self.height - 80
             
-            # Imprime o resto da linha
             if current_line:
                 c.drawString(margin, y, current_line)
                 y -= 14
                 
-            # Nova página se acabar espaço
             if y < 50:
                 c.showPage()
                 self._cabecalho_padrao(c, dossie, "ANÁLISE FORENSE (CONT.)")
