@@ -1,5 +1,5 @@
 """
-services/dossie_generator.py — GERADOR DE DOSSIÊ COMPLETO
+services/dossie_generator.py — GERADOR DE DOSSIÊ
 """
 
 import logging
@@ -9,10 +9,10 @@ from typing import Dict
 logger = logging.getLogger(__name__)
 
 class DossieGenerator:
-    """Gerador de dossiês Bandeirante Digital."""
+    """Gerador de dossiês."""
     
     def gerar_dossie_completo(self, results: Dict) -> str:
-        """Gera dossiê markdown completo."""
+        """Gera dossiê markdown."""
         sections = []
         
         sections.append(self._gerar_header(results))
@@ -30,30 +30,21 @@ class DossieGenerator:
         cnpj = metadata.get("cnpj", "N/D")
         
         return f"""# 🎯 DOSSIÊ DE INTELIGÊNCIA COMERCIAL
-## BANDEIRANTE DIGITAL - MODO DEUS
 
 **📋 EMPRESA:** {empresa}  
 **🔢 CNPJ:** {cnpj}  
-**📅 DATA:** {datetime.now().strftime("%d/%m/%Y %H:%M")}  
-**⚡ VERSÃO:** 3.0 - MODO DEUS COMPLETO
+**📅 DATA:** {datetime.now().strftime("%d/%m/%Y %H:%M")}
 
 ---"""
     
     def _gerar_executive_summary(self, results: Dict) -> str:
         matriz = results.get("matriz_priorizacao", {})
-        score = matriz.get("score_final", 0)
-        status = matriz.get("status", "N/D")
-        classificacao = matriz.get("classificacao", "N/D")
-        
-        rec = results.get("recomendacoes", {})
-        acao = rec.get("acao_recomendada", "N/D")
         
         return f"""## 📊 EXECUTIVE SUMMARY
 
-**🎯 SCORE FINAL:** {score}/100  
-**🏆 CLASSIFICAÇÃO:** {classificacao}  
-**📌 STATUS:** {status}  
-**⚡ AÇÃO RECOMENDADA:** {acao}
+**🎯 SCORE:** {matriz.get('score_final', 0)}/100  
+**📌 STATUS:** {matriz.get('status', 'N/D')}  
+**🏆 CLASSIFICAÇÃO:** {matriz.get('classificacao', 'N/D')}
 
 ---"""
     
@@ -62,11 +53,8 @@ class DossieGenerator:
         
         return f"""## 🎯 MATRIZ DE PRIORIZAÇÃO
 
-### Indicadores Chave
-
-- **Área Total:** {matriz.get('area_total_ha', 0):,.0f} hectares
-- **Incentivos Fiscais:** {matriz.get('total_incentivos', 0)}
-- **Score Final:** {matriz.get('score_final', 0)}/100
+- **Área:** {matriz.get('area_total_ha', 0):,.0f} ha
+- **Score:** {matriz.get('score_final', 0)}/100
 - **Status:** {matriz.get('status', 'N/D')}
 
 ---"""
@@ -74,11 +62,9 @@ class DossieGenerator:
     def _gerar_recomendacoes(self, results: Dict) -> str:
         rec = results.get("recomendacoes", {})
         
-        content = f"""## 🚀 RECOMENDAÇÕES DE AÇÃO
+        content = f"""## 🚀 RECOMENDAÇÕES
 
-**STATUS:** {rec.get('status', 'N/D')}  
-**AÇÃO:** {rec.get('acao_recomendada', 'N/D')}  
-**SCORE:** {rec.get('score', 0)}/100
+**AÇÃO:** {rec.get('acao_recomendada', 'N/D')}
 
 ### Próximos Passos
 
@@ -88,121 +74,67 @@ class DossieGenerator:
             content += f"{passo}\n"
         
         content += f"""
-### Estratégia de Abordagem
+### Estratégia
 
-- **Decisor Principal:** {rec.get('decisor_principal', 'N/D')}
-- **Gatilho a Usar:** {rec.get('gatilho_usar', 'N/D')}
-- **Canal Preferido:** {rec.get('canal_preferido', 'N/D')}
-- **Melhor Momento:** {rec.get('melhor_momento_contato', 'N/D')}
+- **Decisor:** {rec.get('decisor_principal', 'N/D')}
+- **Gatilho:** {rec.get('gatilho_usar', 'N/D')}
+- **Canal:** {rec.get('canal_preferido', 'N/D')}
 
 ---"""
         
         return content
     
     def _gerar_todas_fases(self, results: Dict) -> str:
-        """Gera resumo de todas as fases."""
-        content = "## 📋 DETALHAMENTO DAS FASES\n\n"
+        content = "## 📋 FASES\n\n"
         
         fases = results.get("fases", {})
         
-        # Fase -1: Reputation
+        # Reputation
         reputation = fases.get("fase_-1_reputation", {})
-        content += f"""### 🔍 FASE -1: SHADOW REPUTATION
+        content += f"""### 🔍 FASE -1: REPUTATION
 
-**Flag de Risco:** {reputation.get('flag_risco', 'N/D')}
+**Flag:** {reputation.get('flag_risco', 'N/D')}
 
 ---
 
 """
         
-        # Fase 1: Incentivos
+        # Incentivos
         incentivos = fases.get("fase_1_incentivos", {})
-        estaduais = incentivos.get("incentivos_estaduais", {})
-        multas = incentivos.get("sancoes_multas", {})
-        
-        content += f"""### 💰 FASE 1: INCENTIVOS FISCAIS
+        content += f"""### 💰 FASE 1: INCENTIVOS
 
-- **Total de Incentivos:** {estaduais.get('total_incentivos', 0)}
-- **Multas Fiscais:** {multas.get('total_multas_quantidade', 0)}
+**Total:** {incentivos.get('incentivos_estaduais', {}).get('total_incentivos', 0)}
 
 ---
 
 """
         
-        # Fase 2: Territorial
+        # Territorial
         territorial = fases.get("fase_2_territorial", {})
         fundiario = territorial.get("dados_fundiarios", {})
-        
-        content += f"""### 🗺️ FASE 2: INTELIGÊNCIA TERRITORIAL
+        content += f"""### 🗺️ FASE 2: TERRITORIAL
 
-- **Área Total:** {fundiario.get('area_total_ha', 0):,.0f} hectares
-- **Total de Imóveis:** {fundiario.get('total_imoveis', 0)}
-- **Estados de Presença:** {', '.join(fundiario.get('estados_presenca', ['N/D']))}
+**Área:** {fundiario.get('area_total_ha', 0):,.0f} ha
 
 ---
 
 """
         
-        # Fase 3: Logística
-        logistica = fases.get("fase_3_logistica", {})
-        arm = logistica.get("armazenagem", {})
-        
-        content += f"""### 🚛 FASE 3: LOGÍSTICA & SUPPLY CHAIN
-
-- **Capacidade de Armazenagem:** {arm.get('capacidade_total_toneladas', 0):,.0f} toneladas
-- **Unidades:** {arm.get('total_unidades', 0)}
-
----
-
-"""
-        
-        # Fase 6: Triggers
+        # Triggers
         triggers = fases.get("fase_6_triggers", {})
-        
-        content += f"""### ⏰ FASE 6: TRIGGER EVENTS
+        content += f"""### ⏰ FASE 6: TRIGGERS
 
-**Urgência Geral:** {triggers.get('urgencia_geral', 'N/D')}  
-**Melhor Momento para Contato:** {triggers.get('melhor_momento_contato', 'N/D')}
-
-**Triggers Identificados:** {triggers.get('total_triggers', 0)}
+**Urgência:** {triggers.get('urgencia_geral', 'N/D')}
 
 ---
 
 """
         
-        # Fase 7: Psicologia
+        # Psicologia
         psicologia = fases.get("fase_7_psicologia", {})
-        
-        content += f"""### 🧠 FASE 7: PSICOLOGIA & GATILHOS
+        content += f"""### 🧠 FASE 7: PSICOLOGIA
 
-**Gatilho Psicológico:** {psicologia.get('gatilho_psicologico', 'N/D')}  
-**Canal Preferido:** {psicologia.get('canal_preferido', 'N/D')}
+**Gatilho:** {psicologia.get('gatilho_psicologico', 'N/D')}
 
-**Storytelling de Abertura:**
-{psicologia.get('storytelling_abertura', 'N/D')}
-
-text
-
----
-
-"""
-        
-        return content
-    
-    def _gerar_footer(self, results: Dict) -> str:
-        metadata = results.get("metadata", {})
-        duracao = metadata.get("duracao_segundos", 0)
-        
-        return f"""## 📝 METADADOS
-
-**Versão:** {metadata.get('versao', 'N/D')}  
-**Duração da Investigação:** {duracao:.1f} segundos  
-**Timestamp:** {metadata.get('timestamp_fim', 'N/D')}
-
----
-
-**🎯 Bandeirante Digital - MODO DEUS COMPLETO**  
-*Inteligência de mercado ultra-avançada para prospecção em agronegócio*
-
-© 2026 - Sistema desenvolvido por Bruno Lima | Senior Sistemas | Cuiabá, MT"""
+**Storytelling:**
 
