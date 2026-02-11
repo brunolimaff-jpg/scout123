@@ -414,19 +414,25 @@ if st.session_state.dossie_completo:
             df_multas = pd.DataFrame(multas_ativas)
             st.dataframe(df_multas, use_container_width=True)
     
-    with tab4:
-        trt = dossie.get('processos_trabalhistas', {})
+        with tab4:
+        st.markdown("### 🧠 Protocolo Bruno Lima (Auditoria Forense)")
         
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.metric("Processos Ativos", trt.get('total_processos_ativos', 0))
-        with col_b:
-            st.metric("Valor Reclamado", trt.get('valor_total_reclamado', 'N/D'))
-        with col_c:
-            st.metric("Em Execução", trt.get('em_execucao', 0))
+        # Verifica se existe o relatório forense completo (Ciro)
+        analise_ciro = dossie_completo.get("analise_estrategica", {}).get("relatorio_completo_ciro")
         
-        st.write(f"**Padrão Identificado:** {trt.get('padrão_identificado', 'N/D')}")
-        st.write(f"**Dor Principal:** {trt.get('dor_principal', 'N/D')}")
+        if analise_ciro:
+            # Exibe o relatório Ciro completo com formatação Markdown
+            st.markdown(analise_ciro)
+        else:
+            # Fallback para o modo antigo se não tiver Ciro
+            col1, col2 = st.columns(2)
+            with col1:
+                st.info(f"**Quem é:** {dossie_completo.get('analise_estrategica', {}).get('quem_e_empresa', 'N/D')}")
+                st.warning(f"**Dores:** {dossie_completo.get('analise_estrategica', {}).get('complexidade_dores', 'N/D')}")
+            with col2:
+                st.success(f"**Arsenal:** {dossie_completo.get('analise_estrategica', {}).get('arsenal_recomendado', 'N/D')}")
+                st.error(f"**Plano:** {dossie_completo.get('analise_estrategica', {}).get('plano_ataque', 'N/D')}")
+
     
     # ========== CAMADA 3: SUPPLY CHAIN ==========
     st.markdown("---")
