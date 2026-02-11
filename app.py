@@ -1,4 +1,4 @@
-"""app.py — BANDEIRANTE DIGITAL INTERFACE"""
+"""app.py — BANDEIRANTE DIGITAL INTERFACE COM STATUS VISUAL REAL"""
 
 import streamlit as st
 import asyncio
@@ -38,6 +38,144 @@ with st.sidebar:
     **Localidade:** Cuiabá, MT
     """)
 
+# Função para executar com status visual
+async def executar_com_status_visual(orch, empresa_nome, empresa_cnpj, empresa_uf):
+    """Executa investigação com status visual em tempo real."""
+    
+    start_time = time.time()
+    results = {
+        "metadata": {
+            "empresa": empresa_nome,
+            "cnpj": empresa_cnpj,
+            "uf": empresa_uf,
+            "timestamp_inicio": datetime.now().isoformat(),
+            "versao": "3.0-MODO-DEUS"
+        },
+        "fases": {}
+    }
+    
+    # FASE -1: REPUTATION
+    with st.status("🔍 **FASE -1:** Shadow Reputation", expanded=True) as status:
+        st.write("🔍 Buscando registros públicos...")
+        st.write("📊 Analisando histórico...")
+        try:
+            reputation = await orch.reputation_layer.checagem_completa(empresa_nome, empresa_cnpj)
+            results["fases"]["fase_-1_reputation"] = reputation
+            st.write("✅ Reputation verificada!")
+            status.update(label="✅ FASE -1 COMPLETA", state="complete")
+        except Exception as e:
+            st.write(f"⚠️ Erro: {str(e)}")
+            results["fases"]["fase_-1_reputation"] = {"flag_risco": "ERRO"}
+            status.update(label="⚠️ FASE -1 com erro", state="error")
+    
+    # FASE 1: INCENTIVOS
+    with st.status("💰 **FASE 1:** Incentivos Fiscais", expanded=True) as status:
+        st.write("🔍 Mapeando incentivos estaduais...")
+        st.write("📊 Verificando sancões e multas...")
+        try:
+            incentivos = await orch.tax_layer.mapeamento_completo(empresa_nome, empresa_cnpj, empresa_uf)
+            results["fases"]["fase_1_incentivos"] = incentivos
+            total = incentivos.get("incentivos_estaduais", {}).get("total_incentivos", 0)
+            st.write(f"✅ Encontrados {total} incentivos!")
+            status.update(label="✅ FASE 1 COMPLETA", state="complete")
+        except Exception as e:
+            st.write(f"⚠️ Erro: {str(e)}")
+            results["fases"]["fase_1_incentivos"] = {"incentivos_estaduais": {"total_incentivos": 0}}
+            status.update(label="⚠️ FASE 1 com erro", state="error")
+    
+    # FASE 2: TERRITORIAL
+    with st.status("🗺️ **FASE 2:** Inteligência Territorial", expanded=True) as status:
+        st.write("🔍 Buscando dados fundiários no INCRA...")
+        st.write("🌳 Verificando licenças ambientais...")
+        st.write("📍 Analisando adjacencias e logística...")
+        try:
+            territorial = await orch.territorial_layer.mapeamento_territorial_completo(empresa_nome, empresa_cnpj)
+            results["fases"]["fase_2_territorial"] = territorial
+            area = territorial.get("dados_fundiarios", {}).get("area_total_ha", 0)
+            st.write(f"✅ Área total identificada: {area:,.0f} hectares!")
+            status.update(label="✅ FASE 2 COMPLETA", state="complete")
+        except Exception as e:
+            st.write(f"⚠️ Erro: {str(e)}")
+            results["fases"]["fase_2_territorial"] = {"dados_fundiarios": {"area_total_ha": 0}}
+            status.update(label="⚠️ FASE 2 com erro", state="error")
+    
+    # FASE 3: LOGÍSTICA
+    with st.status("🚛 **FASE 3:** Logística & Supply Chain", expanded=True) as status:
+        st.write("🔍 Mapeando armazenagem...")
+        st.write("🚚 Verificando frota e RNTRC...")
+        try:
+            logistica = await orch.logistics_layer.mapeamento_logistico_completo(empresa_nome, empresa_cnpj)
+            results["fases"]["fase_3_logistica"] = logistica
+            capacidade = logistica.get("armazenagem", {}).get("capacidade_total_toneladas", 0)
+            st.write(f"✅ Capacidade de armazenagem: {capacidade:,.0f} toneladas!")
+            status.update(label="✅ FASE 3 COMPLETA", state="complete")
+        except Exception as e:
+            st.write(f"⚠️ Erro: {str(e)}")
+            results["fases"]["fase_3_logistica"] = {"armazenagem": {"capacidade_total_toneladas": 0}}
+            status.update(label="⚠️ FASE 3 com erro", state="error")
+    
+    # FASE 4: SOCIETÁRIO
+    with st.status("🏢 **FASE 4:** Estrutura Societária", expanded=True) as status:
+        st.write("🔍 Mapeando grupo econômico...")
+        st.write("📊 Analisando capital social...")
+        try:
+            societario = await orch.corporate_layer.mapeamento_societario_completo(empresa_nome, empresa_cnpj, [])
+            results["fases"]["fase_4_societario"] = societario
+            total_empresas = societario.get("estrutura", {}).get("grupo_economico", {}).get("total_empresas_grupo", 0)
+            st.write(f"✅ Grupo com {total_empresas} empresas identificadas!")
+            status.update(label="✅ FASE 4 COMPLETA", state="complete")
+        except Exception as e:
+            st.write(f"⚠️ Erro: {str(e)}")
+            results["fases"]["fase_4_societario"] = {"estrutura": {"grupo_economico": {}}}
+            status.update(label="⚠️ FASE 4 com erro", state="error")
+    
+    # FASE 5: EXECUTIVOS
+    with st.status("👔 **FASE 5:** Profiling de Executivos", expanded=True) as status:
+        st.write("🔍 Perfilando liderança...")
+        st.write("💼 Buscando perfis LinkedIn...")
+        try:
+            executivos = await orch.executive_profiler.profiling_completo(empresa_nome)
+            results["fases"]["fase_5_executivos"] = executivos
+            st.write("✅ Executivos mapeados!")
+            status.update(label="✅ FASE 5 COMPLETA", state="complete")
+        except Exception as e:
+            st.write(f"⚠️ Erro: {str(e)}")
+            results["fases"]["fase_5_executivos"] = {"hierarquia": {}}
+            status.update(label="⚠️ FASE 5 com erro", state="error")
+    
+    # FASE 6: TRIGGERS
+    with st.status("⏰ **FASE 6:** Identificando Triggers", expanded=False) as status:
+        st.write("🔍 Analisando contexto sazonal...")
+        triggers = await orch._identificar_triggers(results)
+        results["fases"]["fase_6_triggers"] = triggers
+        st.write("✅ Triggers identificados!")
+        status.update(label="✅ FASE 6 COMPLETA", state="complete")
+    
+    # FASE 7: PSICOLOGIA
+    with st.status("🧠 **FASE 7:** Mapeamento Psicológico", expanded=False) as status:
+        st.write("🔍 Definindo gatilhos e abordagem...")
+        psicologia = await orch._mapear_psicologia(results)
+        results["fases"]["fase_7_psicologia"] = psicologia
+        st.write("✅ Perfil psicológico definido!")
+        status.update(label="✅ FASE 7 COMPLETA", state="complete")
+    
+    # FASE 10: MATRIZ
+    with st.status("🎯 **FASE 10:** Calculando Matriz de Priorização", expanded=False) as status:
+        st.write("📊 Calculando score final...")
+        matriz = orch._calcular_matriz_priorizacao(results)
+        results["matriz_priorizacao"] = matriz
+        results["recomendacoes"] = orch._gerar_recomendacoes(results)
+        st.write(f"✅ Score final: {matriz.get('score_final', 0)}/100")
+        status.update(label="✅ FASE 10 COMPLETA", state="complete")
+    
+    # Finaliza
+    end_time = time.time()
+    duracao = end_time - start_time
+    results["metadata"]["timestamp_fim"] = datetime.now().isoformat()
+    results["metadata"]["duracao_segundos"] = duracao
+    
+    return results, duracao
+
 # Input
 st.header("🔍 Nova Investigação")
 
@@ -58,39 +196,29 @@ if st.button("🔥 EXECUTAR MODO DEUS", type="primary", use_container_width=True
     elif not api_key:
         st.error("❌ Configure a API Key na sidebar!")
     else:
-        # Container para status
-        status_container = st.empty()
-        progress_bar = st.progress(0)
-        
         try:
+            st.markdown("---")
+            st.markdown("## 🔄 EXECUTANDO INVESTIGAÇÃO...")
+            
             gemini = GeminiService(api_key=api_key)
             orch = BandeiranteOrchestrator(gemini)
             
-            start_time = time.time()
-            
-            # Mostra status inicial
-            status_container.info("🔄 Iniciando investigação...")
-            progress_bar.progress(5)
-            
-            # EXECUTA DE VERDADE (SEM TIMEOUT FAKE)
-            results = asyncio.run(
-                orch.investigacao_completa(
-                    empresa=empresa_nome,
-                    cnpj=empresa_cnpj,
-                    uf=empresa_uf or "MT"
+            # Executa com status visual
+            results, duracao = asyncio.run(
+                executar_com_status_visual(
+                    orch,
+                    empresa_nome,
+                    empresa_cnpj,
+                    empresa_uf or "MT"
                 )
             )
             
-            # Finaliza
-            end_time = time.time()
-            duracao = end_time - start_time
-            
-            progress_bar.progress(100)
-            status_container.success(f"✅ Investigação completa em {duracao:.1f}s!")
+            st.markdown("---")
+            st.success(f"✅ **INVESTIGAÇÃO COMPLETA EM {duracao:.1f} SEGUNDOS!**")
+            st.balloons()
             
             st.session_state["results"] = results
             st.session_state["empresa"] = empresa_nome
-            st.balloons()
             
         except Exception as e:
             st.error(f"❌ Erro: {str(e)}")
