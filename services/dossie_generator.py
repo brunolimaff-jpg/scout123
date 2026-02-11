@@ -179,4 +179,30 @@ class DossieGenerator:
 **Canal Preferido:** {psicologia.get('canal_preferido', 'N/D')}
 
 **Storytelling de Abertura:**
+{psicologia.get('storytelling_abertura', 'N/D')}
+
+text
+
+---
+
+"""
+        
+        return content
+    
+    def _gerar_footer(self, results: Dict) -> str:
+        metadata = results.get("metadata", {})
+        duracao = metadata.get("duracao_segundos", 0)
+        
+        return f"""## 📝 METADADOS
+
+**Versão:** {metadata.get('versao', 'N/D')}  
+**Duração da Investigação:** {duracao:.1f} segundos  
+**Timestamp:** {metadata.get('timestamp_fim', 'N/D')}
+
+---
+
+**🎯 Bandeirante Digital - MODO DEUS COMPLETO**  
+*Inteligência de mercado ultra-avançada para prospecção em agronegócio*
+
+© 2026 - Sistema desenvolvido por Bruno Lima | Senior Sistemas | Cuiabá, MT"""
 
