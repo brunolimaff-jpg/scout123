@@ -1,268 +1,200 @@
 """
-utils/export_handler.py — Sistema de Exportação Defensivo
-CORRIGIDO: Importações opcionais com fallback gracioso
+utils/export_handler.py — Gerador de Relatórios (PDF/JSON)
+Adaptado para Protocolo Bruno Lima (Relatório Forense Ciro)
 """
+import json
 import io
 from datetime import datetime
-import json
-import logging
-
-logger = logging.getLogger(__name__)
-
-# ========== IMPORTS OPCIONAIS (ReportLab) ==========
-try:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
-    from reportlab.lib.units import cm
-    HAS_REPORTLAB = True
-    logger.info("[ExportHandler] ReportLab disponível")
-except ImportError as e:
-    HAS_REPORTLAB = False
-    logger.warning(f"[ExportHandler] ReportLab NÃO instalado: {e}")
-    # Placeholders para evitar erros
-    A4 = None
-    colors = None
-
-# ========== IMPORTS OPCIONAIS (python-docx) ==========
-try:
-    from docx import Document
-    from docx.shared import Inches, Pt, RGBColor
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-    HAS_DOCX = True
-    logger.info("[ExportHandler] python-docx disponível")
-except ImportError as e:
-    HAS_DOCX = False
-    logger.warning(f"[ExportHandler] python-docx NÃO instalado: {e}")
-    Document = None
-
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib import colors
+from reportlab.lib.utils import ImageReader
 
 class ExportHandler:
-    """
-    Handler para exportação de dossiês em múltiplos formatos.
-    Funciona mesmo sem dependências instaladas (com mensagens de erro).
-    """
-    
-    @staticmethod
-    def generate_pdf(dossie_data):
-        """
-        Gera PDF profissional do dossiê RADAR FOX-3.
-        
-        Args:
-            dossie_data: Dicionário com dados completos do dossiê
-            
-        Returns:
-            BytesIO buffer com PDF ou levanta exceção se ReportLab não instalado
-        """
-        if not HAS_REPORTLAB:
-            raise ImportError(
-                "📦 ReportLab não está instalado!\n\n"
-                "Para gerar PDFs, adicione ao requirements.txt:\n"
-                "reportlab>=4.0.0\n\n"
-                "OU use exportação em DOCX/JSON."
-            )
-        
-        logger.info("[ExportHandler] Gerando PDF...")
-        
+    def __init__(self):
+        self.width, self.height = A4
+
+    def gerar_json(self, dossie: dict) -> bytes:
+        """Exporta o dossiê completo em JSON."""
+        return json.dumps(dossie, indent=2, ensure_ascii=False).encode('utf-8')
+
+    def gerar_pdf(self, dossie: dict) -> bytes:
+        """Gera PDF Executivo com Design Profissional."""
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
-            buffer, 
-            pagesize=A4,
-            rightMargin=1.5*cm, 
-            leftMargin=1.5*cm,
-            topMargin=1.5*cm, 
-            bottomMargin=1.5*cm
-        )
+        c = canvas.Canvas(buffer, pagesize=A4)
         
-        elements = []
-        styles = getSampleStyleSheet()
+        # Página 1: Capa e Indicadores
+        self._pagina_capa(c, dossie)
         
-        # ===== ESTILOS =====
-        title_style = ParagraphStyle(
-            'TitleCustom', 
-            parent=styles['Heading1'], 
-            fontSize=22, 
-            spaceAfter=12, 
-            textColor=colors.HexColor("#0f172a"), 
-            alignment=1, 
-            fontName='Helvetica-Bold'
-        )
+        # Página 2: Análise Estratégica (O Relatório Ciro)
+        self._adicionar_analise_estrategica(c, dossie)
         
-        heading2_style = ParagraphStyle(
-            'Heading2Custom', 
-            parent=styles['Heading2'], 
-            fontSize=14, 
-            spaceAfter=8,
-            textColor=colors.HexColor("#1e40af"), 
-            fontName='Helvetica-Bold'
-        )
+        c.save()
+        buffer.seek(0)
+        return buffer.getvalue()
+
+    def _cabecalho_padrao(self, c, dossie, titulo_pag="INTELLIGENCE REPORT"):
+        """Cabeçalho padrão para todas as páginas."""
+        # Faixa superior
+        c.setFillColor(colors.darkblue)
+        c.rect(0, self.height - 50, self.width, 50, fill=True, stroke=False)
         
-        body_style = ParagraphStyle(
-            'BodyCustom', 
-            parent=styles['Normal'], 
-            fontSize=9, 
-            spaceAfter=6, 
-            leading=12
-        )
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(30, self.height - 35, f"RADAR FOX-3 | {titulo_pag}")
         
-        # ===== CABEÇALHO =====
-        elements.append(Paragraph("🔴 RADAR FOX-3 | INTELLIGENCE REPORT", title_style))
-        elements.append(Spacer(1, 0.3*cm))
+        # Subtítulo com Data e Alvo
+        data_str = datetime.now().strftime("%d/%m/%Y %H:%M")
+        sas_score = dossie.get('sas_score', 'N/A')
+        sas_tier = dossie.get('sas_tier', 'N/A')
         
-        empresa_alvo = dossie_data.get('empresa_alvo', 'ALVO DESCONHECIDO')
-        sas_score = dossie_data.get('sas_score', 'N/A')
-        sas_tier = dossie_data.get('sas_tier', 'N/A')
+        subtitulo = f"ALVO: {dossie.get('empresa_alvo', 'ALVO DESCONHECIDO')} | SCORE SAS: {sas_score} ({sas_tier}) | DATA: {data_str}"
+        c.setFont("Helvetica", 9)
+        c.drawString(30, self.height - 48, subtitulo)
+
+    def _pagina_capa(self, c, dossie):
+        """Página 1: Resumo Executivo."""
+        self._cabecalho_padrao(c, dossie)
         
-        elements.append(Paragraph(
-            f"<b>ALVO:</b> {empresa_alvo.upper()} | "
-            f"<b>SCORE SAS:</b> {sas_score} ({sas_tier}) | "
-            f"<b>DATA:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}", 
-            body_style
-        ))
-        elements.append(Spacer(1, 0.5*cm))
+        y = self.height - 100
         
-        # ===== SCORECARD RESUMIDO =====
-        elementos_resumo = [
-            ['INDICADOR', 'DADOS RECUPERADOS'],
-            ['Área Total', f"{dossie_data.get('dados_operacionais', {}).get('area_total', 'N/D')} ha"],
-            ['Faturamento', dossie_data.get('dados_financeiros', {}).get('faturamento_estimado', 'N/D')],
-            ['ERP Principal', dossie_data.get('tech_stack', {}).get('erp_principal', 'N/D')],
+        # Indicadores Principais (Cards)
+        dados_ops = dossie.get('dados_operacionais', {})
+        dados_fin = dossie.get('dados_financeiros', {})
+        tech = dossie.get('tech_stack', {})
+        
+        indicadores = [
+            ("Área Total", f"{dados_ops.get('area_total', 0):,.0f} ha"),
+            ("Faturamento", str(dados_fin.get('faturamento_estimado', 'N/D'))[:30]), # Limita tamanho
+            ("ERP Principal", str(tech.get('erp_principal', 'N/D')))
         ]
         
-        table_resumo = Table(elementos_resumo, colWidths=[4*cm, 8*cm])
-        table_resumo.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#0f172a")),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
-        ]))
-        elements.append(table_resumo)
-        elements.append(Spacer(1, 0.5*cm))
-        
-        # ===== ANÁLISE ESTRATÉGICA =====
-        elements.append(PageBreak())
-        elements.append(Paragraph("🎯 ANÁLISE ESTRATÉGICA", heading2_style))
-        
-        analise = dossie_data.get('analise_estrategica', {})
-        
-        for titulo_secao, conteudo_secao in [
-            ("QUEM É ESTA EMPRESA?", analise.get('quem_e_empresa', 'Análise indisponível')),
-            ("DORES & COMPLEXIDADE", analise.get('complexidade_dores', 'Análise indisponível')),
-            ("ARSENAL RECOMENDADO", analise.get('arsenal_recomendado', 'Análise indisponível')),
-            ("PLANO DE ATAQUE", analise.get('plano_ataque', 'Análise indisponível'))
-        ]:
-            elements.append(Paragraph(f"<b>{titulo_secao}:</b>", heading2_style))
-            # Limpa markdown
-            conteudo_limpo = conteudo_secao.replace('**', '').replace('##', '')[:500]
-            elements.append(Paragraph(conteudo_limpo, body_style))
-            elements.append(Spacer(1, 0.3*cm))
-        
-        # ===== RODAPÉ =====
-        elements.append(PageBreak())
-        elements.append(Paragraph("=" * 80, body_style))
-        elements.append(Paragraph("RELATÓRIO CONFIDENCIAL | USO RESTRITO SENIOR AGRO", body_style))
-        elements.append(Paragraph(f"Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')}", body_style))
-        
-        doc.build(elements)
-        buffer.seek(0)
-        
-        logger.info("[ExportHandler] PDF gerado com sucesso")
-        return buffer
-    
-    @staticmethod
-    def generate_docx(dossie_data):
-        """
-        Gera DOCX editável do dossiê.
-        
-        Args:
-            dossie_data: Dicionário com dados completos do dossiê
+        # Desenha "Cartões"
+        x_start = 50
+        for titulo, valor in indicadores:
+            c.setStrokeColor(colors.lightgrey)
+            c.rect(x_start, y - 60, 150, 50, stroke=True, fill=False)
             
-        Returns:
-            BytesIO buffer com DOCX ou levanta exceção se python-docx não instalado
-        """
-        if not HAS_DOCX:
-            raise ImportError(
-                "📦 python-docx não está instalado!\n\n"
-                "Para gerar DOCX, adicione ao requirements.txt:\n"
-                "python-docx>=1.1.0\n\n"
-                "OU use exportação em JSON."
-            )
-        
-        logger.info("[ExportHandler] Gerando DOCX...")
-        
-        doc = Document()
-        
-        # Estilos
-        style_normal = doc.styles['Normal']
-        style_normal.font.name = 'Calibri'
-        style_normal.font.size = Pt(10)
-        
-        # Cabeçalho
-        titulo = doc.add_heading(f"🔴 DOSSIÊ FOX-3: {dossie_data.get('empresa_alvo', 'ALVO').upper()}", 0)
-        titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
-        subtitulo = doc.add_paragraph()
-        subtitulo.add_run(
-            f"Data: {datetime.now().strftime('%d/%m/%Y')} | "
-            f"Score SAS: {dossie_data.get('sas_score', 'N/A')} ({dossie_data.get('sas_tier', 'N/A')})"
-        ).bold = True
-        
-        # Tabela Resumo
-        table = doc.add_table(rows=1, cols=2)
-        table.style = 'Light Shading Accent 1'
-        hdr_cells = table.rows[0].cells
-        hdr_cells[0].text = 'INDICADOR'
-        hdr_cells[1].text = 'VALOR'
-        
-        resumo = {
-            'Área Total': f"{dossie_data.get('dados_operacionais', {}).get('area_total', 'N/D')} ha",
-            'Faturamento': dossie_data.get('dados_financeiros', {}).get('faturamento_estimado', 'N/D'),
-            'ERP': dossie_data.get('tech_stack', {}).get('erp_principal', 'N/D'),
-        }
-        
-        for chave, valor in resumo.items():
-            linha = table.add_row().cells
-            linha[0].text = chave
-            linha[1].text = str(valor)
-        
-        doc.add_paragraph("")
-        
-        # Análise Estratégica
-        doc.add_heading("🎯 ANÁLISE ESTRATÉGICA", level=1)
-        analise = dossie_data.get('analise_estrategica', {})
-        doc.add_paragraph(analise.get('quem_e_empresa', 'Análise indisponível'))
-        
-        # Rodapé
-        doc.add_paragraph("")
-        doc.add_paragraph("=" * 80)
-        doc.add_paragraph(f"Confidencial | Gerado {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-        
-        buffer = io.BytesIO()
-        doc.save(buffer)
-        buffer.seek(0)
-        
-        logger.info("[ExportHandler] DOCX gerado com sucesso")
-        return buffer
-    
-    @staticmethod
-    def generate_json(dossie_data):
-        """
-        Gera JSON bruto do dossiê (sempre disponível).
-        
-        Args:
-            dossie_data: Dicionário com dados completos do dossiê
+            c.setFillColor(colors.grey)
+            c.setFont("Helvetica", 10)
+            c.drawString(x_start + 10, y - 25, titulo)
             
-        Returns:
-            BytesIO buffer com JSON
-        """
-        logger.info("[ExportHandler] Gerando JSON...")
+            c.setFillColor(colors.black)
+            c.setFont("Helvetica-Bold", 12)
+            # Ajusta fonte se valor for longo
+            if len(str(valor)) > 15:
+                c.setFont("Helvetica-Bold", 9)
+            c.drawString(x_start + 10, y - 45, str(valor))
+            
+            x_start += 170
+
+        y -= 100
         
-        json_str = json.dumps(dossie_data, indent=2, ensure_ascii=False, default=str)
-        buffer = io.BytesIO(json_str.encode('utf-8'))
-        buffer.seek(0)
+        # Detalhes Operacionais
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(50, y, "DETALHES OPERACIONAIS & INDUSTRIAIS")
+        y -= 20
+        c.line(50, y, 550, y)
+        y -= 20
         
-        logger.info("[ExportHandler] JSON gerado com sucesso")
-        return buffer
+        c.setFont("Helvetica", 10)
+        ind = dados_ops.get('detalhes_industriais', {})
+        if ind:
+            details = [
+                f"Armazenagem: {ind.get('capacidade_armazenagem', 'N/D')}",
+                f"Plantas: {', '.join(ind.get('plantas_industriais', [])[:3])}", # Max 3
+                f"Segmentos: {', '.join(ind.get('segmentos_atuacao', []))}"
+            ]
+        else:
+            details = ["Nenhuma infraestrutura industrial pública identificada."]
+            
+        for d in details:
+            c.drawString(50, y, f"• {d}")
+            y -= 15
+
+        y -= 20
+        
+        # Decisores
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(50, y, "DECISORES & CAPEX")
+        y -= 20
+        c.line(50, y, 550, y)
+        y -= 20
+        
+        c.setFont("Helvetica", 10)
+        org = dossie.get('dados_organizacionais', {})
+        people = org.get('decisores_chave', {})
+        
+        if people:
+            diretoria = people.get('diretoria', [])[:3]
+            for p in diretoria:
+                c.drawString(50, y, f"• {p}")
+                y -= 15
+        else:
+            c.drawString(50, y, "• Organograma não disponível publicamente.")
+
+        c.showPage()
+
+    def _adicionar_analise_estrategica(self, c, dossie):
+        """Página 2: O Relatório Forense (Protocolo Bruno Lima)."""
+        self._cabecalho_padrao(c, dossie, "ANÁLISE ESTRATÉGICA FORENSE")
+        
+        y = self.height - 80
+        margin = 50
+        max_width = self.width - 2 * margin
+        
+        # Tenta pegar o texto do Ciro
+        texto_ciro = dossie.get("analise_estrategica", {}).get("relatorio_completo_ciro", "")
+        
+        # Fallback se não tiver Ciro
+        if not texto_ciro:
+            texto_ciro = "Relatório Forense indisponível. Consulte a versão web."
+
+        # Processamento de Texto para PDF (Quebra de Linha Básica)
+        c.setFont("Helvetica", 10)
+        c.setFillColor(colors.black)
+        
+        lines = texto_ciro.split('\n')
+        
+        for line in lines:
+            # Tratamento básico de Markdown
+            is_bold = "**" in line or "##" in line
+            clean_line = line.replace("**", "").replace("## ", "").replace("# ", "").replace("🕵️‍♂️", "").replace("🧬", "")
+            
+            if is_bold:
+                c.setFont("Helvetica-Bold", 10)
+                y -= 5 # Extra space before header
+            else:
+                c.setFont("Helvetica", 10)
+            
+            # Word wrap manual
+            words = clean_line.split()
+            current_line = ""
+            
+            for word in words:
+                test_line = f"{current_line} {word}".strip()
+                width = c.stringWidth(test_line, "Helvetica-Bold" if is_bold else "Helvetica", 10)
+                
+                if width < max_width:
+                    current_line = test_line
+                else:
+                    c.drawString(margin, y, current_line)
+                    y -= 14
+                    current_line = word
+                    
+                    # Nova página se acabar espaço
+                    if y < 50:
+                        c.showPage()
+                        self._cabecalho_padrao(c, dossie, "ANÁLISE FORENSE (CONT.)")
+                        y = self.height - 80
+            
+            # Imprime o resto da linha
+            if current_line:
+                c.drawString(margin, y, current_line)
+                y -= 14
+                
+            # Nova página se acabar espaço
+            if y < 50:
+                c.showPage()
+                self._cabecalho_padrao(c, dossie, "ANÁLISE FORENSE (CONT.)")
+                y = self.height - 80
